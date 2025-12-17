@@ -1,4 +1,4 @@
-# HellHaven: StorageHub SDK Load Tests
+# HellHaven: DataHaven/StorageHub Load Tests
 
 This repo is an Artillery-based load testing suite to measure limits and identify bottlenecks in DataHaven and StorageHub.
 
