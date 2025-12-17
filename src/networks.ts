@@ -1,0 +1,63 @@
+export type NetworkName = "testnet" | "stagenet";
+
+export type NetworkConfig = Readonly<{
+  name: NetworkName;
+  chain: Readonly<{
+    id: number;
+    name: string;
+    evmRpcUrl: string;
+    substrateWsUrl: `wss://${string}`;
+    filesystemPrecompileAddress: `0x${string}`;
+  }>;
+  msp: Readonly<{
+    baseUrl: string;
+    timeoutMs?: number;
+    siweDomain: string;
+    siweUri: string;
+  }>;
+}>;
+
+// IMPORTANT:
+// - These are intentionally hardcoded so the harness is deterministic in CI.
+// - Fill in the real URLs/IDs for your environments.
+export const NETWORKS: Readonly<Record<NetworkName, NetworkConfig>> = {
+  testnet: {
+    name: "testnet",
+    chain: {
+      id: 55931,
+      name: "DataHaven Testnet",
+      evmRpcUrl: "https://services.datahaven-testnet.network/testnet",
+      substrateWsUrl: "wss://services.datahaven-testnet.network/testnet",
+      filesystemPrecompileAddress: "0x0000000000000000000000000000000000000404",
+    },
+    msp: {
+      baseUrl: "https://deo-dh-backend.testnet.datahaven-infra.network",
+      timeoutMs: 30_000,
+      siweDomain: "deo-dh-backend.testnet.datahaven-infra.network",
+      siweUri: "https://deo-dh-backend.testnet.datahaven-infra.network",
+    },
+  },
+  stagenet: {
+    name: "stagenet",
+    chain: {
+      id: 55932,
+      name: "DataHaven Stagenet",
+      evmRpcUrl: "https://services.datahaven-dev.network/stagenet",
+      substrateWsUrl: "wss://services.datahaven-dev.network/stagenet",
+      filesystemPrecompileAddress: "0x0000000000000000000000000000000000000404",
+    },
+    msp: {
+      baseUrl: "https://deo-dh-backend.stagenet.datahaven-infra.network",
+      timeoutMs: 60_000,
+      siweDomain: "deo-dh-backend.stagenet.datahaven-infra.network",
+      siweUri: "https://deo-dh-backend.stagenet.datahaven-infra.network",
+    },
+  },
+} as const;
+
+export function parseNetworkName(raw: string): NetworkName {
+  if (raw === "testnet" || raw === "stagenet") {
+    return raw;
+  }
+  throw new Error(`Invalid NETWORK: ${raw} (expected 'testnet' or 'stagenet')`);
+}

@@ -1,0 +1,40 @@
+config:
+  target: "http://localhost"
+  processor: "./dist/src/scenarios/msp-unauth.js"
+  variables:
+    # IMPORTANT: keep this in sync with the total duration of all phases (seconds).
+    # (10 + 20 + 40 + 10 + 10) = 90
+    TEST_TOTAL_DURATION_SEC: 90
+    VU_SLEEP_MIN_MS: 200
+    VU_SLEEP_MAX_MS: 250
+
+  phases:
+    - name: warmup
+      duration: 10
+      arrivalRate: 1
+
+    - name: ramp
+      duration: 20
+      arrivalRate: 1
+      rampTo: 3
+
+    - name: steady
+      duration: 40
+      arrivalRate: 3
+
+    - name: spike
+      duration: 10
+      arrivalRate: 3
+      rampTo: 6
+
+    - name: cooldown
+      duration: 10
+      arrivalRate: 6
+      rampTo: 1
+
+scenarios:
+  - name: msp_unauth_load
+    flow:
+      - function: mspUnauthLoad
+
+

@@ -1,0 +1,30 @@
+{
+  "name": "storagehub-load-tests",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "fmt": "biome format . --error-on-warnings",
+    "fmt:fix": "biome format . --write",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint . --write",
+    "build": "tsc -p tsconfig.json",
+    "preflight": "node dist/scripts/preflight.js",
+    "test": "pnpm build && pnpm preflight && artillery run artillery.yml",
+    "test:msp-unauth": "pnpm build && node dist/scripts/run-artillery-parallel.js artillery.msp-unauth.yml"
+  },
+  "dependencies": {
+    "@storagehub-sdk/core": "0.3.4",
+    "@storagehub-sdk/msp-client": "0.3.4",
+    "artillery": "^2.0.0",
+    "pino": "^10.1.0",
+    "viem": "^2.42.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.6.0",
+    "@types/node": "^25.0.2",
+    "typescript": "^5.6.3"
+  }
+}

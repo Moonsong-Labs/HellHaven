@@ -1,0 +1,20 @@
+config:
+  target: "http://localhost"
+  processor: "./dist/src/scenarios/connect.js"
+  payload:
+    - path: "./data/private_keys.csv"
+      fields:
+        - privateKey
+      skipHeader: true
+      order: sequence
+  phases:
+    - name: connect
+      duration: 10
+      arrivalRate: 10
+
+scenarios:
+  - name: sdk_connect
+    flow:
+      - function: connectClients
+
+
