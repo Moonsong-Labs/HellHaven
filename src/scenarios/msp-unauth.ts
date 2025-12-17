@@ -16,27 +16,6 @@ type ArtilleryContext = Readonly<{
 
 const runStartedAtMs = Date.now();
 
-function readInt(ctx: ArtilleryContext, key: string, fallback: number): number {
-  const v = ctx.vars?.[key];
-  if (typeof v === "number" && Number.isFinite(v)) {
-    return v;
-  }
-  if (typeof v === "string" && v.length > 0) {
-    const n = Number.parseInt(v, 10);
-    if (Number.isFinite(n)) {
-      return n;
-    }
-  }
-  const envRaw = process.env[key];
-  if (envRaw && envRaw.length > 0) {
-    const n = Number.parseInt(envRaw, 10);
-    if (Number.isFinite(n)) {
-      return n;
-    }
-  }
-  return fallback;
-}
-
 function randIntInclusive(min: number, max: number): number {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
@@ -78,34 +57,27 @@ export async function mspUnauthLoad(
   const logger = getLogger();
   const env = readEnv();
 
-  const totalDurationSec = readInt(context, "TEST_TOTAL_DURATION_SEC", 270);
-  const endAtMs = runStartedAtMs + totalDurationSec * 1000;
-
-  const sleepMinMs = readInt(context, "VU_SLEEP_MIN_MS", 50);
-  const sleepMaxMs = readInt(context, "VU_SLEEP_MAX_MS", 250);
-
   const client = await connectUnauth(env, logger);
 
-  while (Date.now() < endAtMs) {
-    const which = randIntInclusive(0, 1);
-    const start = Date.now();
+  const healthStart = Date.now();
+  try {
+    await client.info.getHealth();
+    events.emit("counter", "msp.health.ok", 1);
+    events.emit("histogram", "msp.health.ms", Date.now() - healthStart);
+  } catch (err) {
+    events.emit("counter", "msp.req.err", 1);
+    logger.debug({ err }, "msp unauth request error");
+  }
 
-    try {
-      if (which === 0) {
-        await client.info.getHealth();
-        events.emit("counter", "msp.health.ok", 1);
-        events.emit("histogram", "msp.health.ms", Date.now() - start);
-      } else if (which === 1) {
-        await client.info.getInfo();
-        events.emit("counter", "msp.info.ok", 1);
-        events.emit("histogram", "msp.info.ms", Date.now() - start);
-      }
-    } catch (err) {
-      events.emit("counter", "msp.req.err", 1);
-      // We continue until the end; log at debug to avoid noisy runs.
-      logger.debug({ err }, "msp unauth request error");
-    }
+  await sleep(1000);
 
-    await sleep(randIntInclusive(sleepMinMs, sleepMaxMs));
+  const infoStart = Date.now();
+  try {
+    await client.info.getInfo();
+    events.emit("counter", "msp.info.ok", 1);
+    events.emit("histogram", "msp.info.ms", Date.now() - infoStart);
+  } catch (err) {
+    events.emit("counter", "msp.req.err", 1);
+    logger.debug({ err }, "msp unauth request error");
   }
 }
