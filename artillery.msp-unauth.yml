@@ -3,10 +3,8 @@ config:
   processor: "./dist/src/scenarios/msp-unauth.js"
   variables:
     # IMPORTANT: keep this in sync with the total duration of all phases (seconds).
-    # (10 + 20 + 40 + 10 + 10) = 90
-    TEST_TOTAL_DURATION_SEC: 90
-    VU_SLEEP_MIN_MS: 200
-    VU_SLEEP_MAX_MS: 250
+    # (10 + 20 + 40 + 60 + 10) = 140
+    TEST_TOTAL_DURATION_SEC: 140
 
   phases:
     - name: warmup
@@ -16,16 +14,17 @@ config:
     - name: ramp
       duration: 20
       arrivalRate: 1
-      rampTo: 3
+      rampTo: 10
 
     - name: steady
       duration: 40
-      arrivalRate: 3
+      arrivalRate: 5
+      rampTo: 50
 
     - name: spike
-      duration: 10
-      arrivalRate: 3
-      rampTo: 6
+      duration: 60
+      arrivalRate: 50
+      rampTo: 100
 
     - name: cooldown
       duration: 10

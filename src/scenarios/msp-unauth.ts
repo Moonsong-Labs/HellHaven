@@ -14,14 +14,6 @@ type ArtilleryContext = Readonly<{
   vars?: Record<string, unknown>;
 }>;
 
-const runStartedAtMs = Date.now();
-
-function randIntInclusive(min: number, max: number): number {
-  const lo = Math.min(min, max);
-  const hi = Math.max(min, max);
-  return lo + Math.floor(Math.random() * (hi - lo + 1));
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
