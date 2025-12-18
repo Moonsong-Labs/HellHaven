@@ -1,4 +1,4 @@
-export type NetworkName = "testnet" | "stagenet";
+export type NetworkName = "testnet" | "stagenet" | "local";
 
 export type NetworkConfig = Readonly<{
   name: NetworkName;
@@ -6,7 +6,7 @@ export type NetworkConfig = Readonly<{
     id: number;
     name: string;
     evmRpcUrl: string;
-    substrateWsUrl: `wss://${string}`;
+    substrateWsUrl: `${"ws" | "wss"}://${string}`;
     filesystemPrecompileAddress: `0x${string}`;
   }>;
   msp: Readonly<{
@@ -53,11 +53,29 @@ export const NETWORKS: Readonly<Record<NetworkName, NetworkConfig>> = {
       siweUri: "https://deo-dh-backend.stagenet.datahaven-infra.network",
     },
   },
+  local: {
+    name: "local",
+    chain: {
+      id: 181222,
+      name: "StorageHub Solochain EVM",
+      evmRpcUrl: "http://127.0.0.1:9888",
+      substrateWsUrl: "ws://127.0.0.1:9888",
+      filesystemPrecompileAddress: "0x0000000000000000000000000000000000000064",
+    },
+    msp: {
+      baseUrl: "http://127.0.0.1:8080",
+      timeoutMs: 60_000,
+      siweDomain: "localhost:3001",
+      siweUri: "http://localhost:3001",
+    },
+  },
 } as const;
 
 export function parseNetworkName(raw: string): NetworkName {
-  if (raw === "testnet" || raw === "stagenet") {
+  if (raw === "testnet" || raw === "stagenet" || raw === "local") {
     return raw;
   }
-  throw new Error(`Invalid NETWORK: ${raw} (expected 'testnet' or 'stagenet')`);
+  throw new Error(
+    `Invalid NETWORK: ${raw} (expected 'testnet', 'stagenet' or 'local')`
+  );
 }

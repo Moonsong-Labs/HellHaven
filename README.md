@@ -16,7 +16,7 @@ pnpm install
 ## Environment variables
 
 Required:
-- `NETWORK` (`testnet` or `stagenet`)
+- `NETWORK` (`testnet`, `stagenet` or `local`)
 
 Optional:
 - none (health checks are unauthenticated)
@@ -26,6 +26,13 @@ Optional:
 Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts` and are copied from `datahaven-monitor`:
 - **Testnet**: MSP `https://deo-dh-backend.testnet.datahaven-infra.network`
 - **Stagenet**: MSP `https://deo-dh-backend.stagenet.datahaven-infra.network`
+- **Local**: MSP `http://127.0.0.1:8080`, RPC `http://127.0.0.1:9888`
+
+Local notes:
+- `NETWORK=local` expects:
+  - MSP at `http://127.0.0.1:8080`
+  - EVM/Substrate RPC at `http://127.0.0.1:9888` / `ws://127.0.0.1:9888`
+  - SIWE domain/uri: `localhost:3001` / `http://localhost:3001`
 
 ## Commands
 
@@ -35,6 +42,16 @@ Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts` and are co
 - `pnpm lint:fix` — apply safe lint fixes
 - `pnpm test` — build -> preflight -> artillery
 - `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
+
+Examples (local):
+
+```bash
+NETWORK=local pnpm test:msp-unauth
+```
+
+```bash
+NETWORK=local STORAGEHUB_PRIVATE_KEY=0x... pnpm test
+```
 
 ## Logging
 
