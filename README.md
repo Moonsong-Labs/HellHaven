@@ -35,6 +35,7 @@ Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts` and are co
 - `pnpm lint:fix` — apply safe lint fixes
 - `pnpm test` — build -> preflight -> artillery
 - `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
+- `pnpm test:download` — file download load test (requires SIWE auth + FILE_KEY)
 
 ## Logging
 
@@ -79,6 +80,30 @@ Metrics emitted (counters + histograms):
 - `msp.health.ok`, `msp.health.ms`
 - `msp.info.ok`, `msp.info.ms`
 - `msp.req.err` (total request errors)
+
+## Download load test
+
+This test authenticates via SIWE and downloads a file from the MSP, measuring throughput and latency.
+
+Required env vars:
+- `NETWORK` (`testnet` or `stagenet`)
+- `FILE_KEY` (the file key/hash to download)
+
+Run:
+
+```bash
+NETWORK=stagenet FILE_KEY=<your-file-key> pnpm test:download
+```
+
+Knobs (optional):
+- `ARTILLERY_WORKERS=4` (parallel local processes)
+- `LOG_LEVEL=info` (see Logging section)
+
+Metrics emitted:
+- `download.siwe.ok`, `download.siwe.ms` (SIWE auth)
+- `download.file.ok`, `download.file.ms` (file download)
+- `download.bytes` (total bytes downloaded per request)
+- `download.siwe.err`, `download.file.err` (error counters)
 
 ## Per-VU private keys (Artillery payload)
 
