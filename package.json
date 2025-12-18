@@ -13,7 +13,8 @@
     "build": "tsc -p tsconfig.json",
     "preflight": "pnpm exec tsx scripts/preflight.ts",
     "test": "pnpm build && pnpm preflight && pnpm exec artillery run scenarios/artillery.yml",
-    "test:msp-unauth": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.msp-unauth.yml"
+    "test:msp-unauth": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.msp-unauth.yml",
+    "test:download": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.download.yml"
   },
   "dependencies": {
     "@storagehub-sdk/core": "0.3.4",
