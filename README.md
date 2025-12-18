@@ -42,6 +42,18 @@ Local notes:
 - `pnpm lint:fix` — apply safe lint fixes
 - `pnpm test` — build -> preflight -> artillery
 - `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
+- `pnpm test:siwe:byIndex` — derive & print account (byIndex mode; requires `TEST_MNEMONIC`)
+- `pnpm test:siwe:sequential` — derive & print account (sequential mode; requires `TEST_MNEMONIC`)
+- `pnpm test:siwe:random` — derive & print account (random mode; requires `TEST_MNEMONIC`)
+
+Test mnemonic (for local testing only; never use with real funds):
+- `test test test test test test test test test test test junk`
+
+Example:
+
+```bash
+LOG_LEVEL=info LOG_CONSOLE=true TEST_MNEMONIC="test test test test test test test test test test test junk" pnpm test:siwe:sequential
+```
 
 Examples (local):
 
