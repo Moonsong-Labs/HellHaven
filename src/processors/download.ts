@@ -33,7 +33,8 @@ export async function downloadFile(
 
   // Get private key (from Artillery vars or fallback)
   const privateKeyRaw =
-    typeof context.vars?.privateKey === "string" && context.vars.privateKey.length > 0
+    typeof context.vars?.privateKey === "string" &&
+    context.vars.privateKey.length > 0
       ? context.vars.privateKey
       : nextPrivateKey().privateKey;
 
@@ -82,4 +83,3 @@ export async function downloadFile(
     throw err;
   }
 }
-
