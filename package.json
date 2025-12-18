@@ -12,8 +12,8 @@
     "lint:fix": "biome lint . --write",
     "build": "tsc -p tsconfig.json",
     "preflight": "node dist/scripts/preflight.js",
-    "test": "pnpm build && pnpm preflight && artillery run artillery.yml",
-    "test:msp-unauth": "pnpm build && node dist/scripts/run-artillery-parallel.js artillery.msp-unauth.yml"
+    "test": "pnpm build && pnpm preflight && artillery run scenarios/artillery.yml",
+    "test:msp-unauth": "pnpm build && node dist/scripts/run-artillery-parallel.js scenarios/artillery.msp-unauth.yml"
   },
   "dependencies": {
     "@storagehub-sdk/core": "0.3.4",
