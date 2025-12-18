@@ -22,7 +22,7 @@ function parseArgs(argv: string[]): Args {
   const scriptPath = argv[2];
   if (!scriptPath) {
     throw new Error(
-      "Usage: node dist/scripts/run-artillery-parallel.js <script.yml>"
+      "Usage: pnpm exec tsx scripts/run-artillery-parallel.ts <script.yml>"
     );
   }
   const workers = parseWorkers(process.env.ARTILLERY_WORKERS);
@@ -45,6 +45,7 @@ function runOne(
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     const cmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
     const logsDir = join(process.cwd(), "logs");
     mkdirSync(logsDir, { recursive: true });
     const logPath = join(
@@ -84,20 +85,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Spawn N artillery runs concurrently. Each run is an independent local process.
   const results = await Promise.all(
     Array.from({ length: workers }, (_v, i) =>
       runOne(i + 1, scriptPath, runStamp)
     )
   );
 
-  // Fail if any worker failed.
   const worst = results.reduce((acc, x) => (x !== 0 ? x : acc), 0);
   process.exitCode = worst;
 }
 
 main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
   console.error(err);
   process.exitCode = 1;
 });

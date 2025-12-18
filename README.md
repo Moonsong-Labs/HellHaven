@@ -82,7 +82,7 @@ Metrics emitted (counters + histograms):
 
 ## Per-VU private keys (Artillery payload)
 
-This test expects a per-VU `privateKey` variable from `config.payload` in `artillery.yml`.
+This test expects a per-VU `privateKey` variable from `config.payload` in `scenarios/artillery.yml`.
 
 1) Create `data/private_keys.csv` (ignored by git), based on the example:
 - `data/private_keys.example.csv`

@@ -1,8 +1,8 @@
 config:
   target: "http://localhost"
-  processor: "./dist/src/scenarios/connect.js"
+  processor: "../dist/src/processors/connect.js"
   payload:
-    - path: "./data/private_keys.csv"
+    - path: "../data/private_keys.csv"
       fields:
         - privateKey
       skipHeader: true
