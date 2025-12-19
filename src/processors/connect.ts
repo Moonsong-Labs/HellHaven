@@ -12,6 +12,7 @@ import {
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import { toError } from "../helpers/errors.js";
+import { readRequiredEnv } from "../helpers/env.js";
 import { createViemWallet } from "../sdk/viemWallet.js";
 
 type Done = (error?: Error) => void;
@@ -23,14 +24,6 @@ type ArtilleryEvents = Readonly<{
 type ArtilleryContext = {
   vars?: Record<string, unknown>;
 };
-
-function readRequiredEnv(key: string): string {
-  const v = process.env[key];
-  if (!v || v.trim().length === 0) {
-    throw new Error(`Missing required env var: ${key}`);
-  }
-  return v.trim();
-}
 
 async function maybeClose(obj: unknown): Promise<void> {
   if (!obj || typeof obj !== "object") {

@@ -8,6 +8,7 @@ import {
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import { toError } from "../helpers/errors.js";
+import { readRequiredEnv } from "../helpers/env.js";
 import { authenticateSIWE } from "../sdk/msp.js";
 import { MspClient } from "@storagehub-sdk/msp-client";
 import type { HttpClientConfig } from "@storagehub-sdk/core";
@@ -22,14 +23,6 @@ type ArtilleryEvents = Readonly<{
 type ArtilleryContext = {
   vars?: Record<string, unknown>;
 };
-
-function readRequiredEnv(key: string): string {
-  const v = process.env[key];
-  if (!v || v.trim().length === 0) {
-    throw new Error(`Missing required env var: ${key}`);
-  }
-  return v.trim();
-}
 
 /**
  * Real SIWE test function:
