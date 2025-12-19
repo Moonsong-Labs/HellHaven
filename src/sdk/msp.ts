@@ -4,10 +4,17 @@ import type { Env } from "../config.js";
 import type { Logger } from "pino";
 import { NETWORKS } from "../networks.js";
 import type { WalletClient } from "viem";
+import { buildMspHttpClientConfig } from "./mspHttpConfig.js";
 
 export type MspConnection = Readonly<{
   client: MspClient;
   setSession: (s: Readonly<Session>) => void;
+  getSession: () => Readonly<Session> | undefined;
+  /**
+   * Convenience helper to retrieve the current auth token (if any).
+   * This is derived from the stored Session that is also returned by sessionProvider.
+   */
+  getToken: () => string | undefined;
 }>;
 
 export type MspAuthResult = Readonly<{
@@ -20,24 +27,22 @@ export async function connectMsp(
   logger?: Logger
 ): Promise<MspConnection> {
   const network = NETWORKS[env.network];
-  const { msp } = network;
-
-  const config = {
-    baseUrl: msp.baseUrl,
-    ...(typeof msp.timeoutMs === "number" ? { timeoutMs: msp.timeoutMs } : {}),
-  } satisfies HttpClientConfig;
+  const config = buildMspHttpClientConfig(network);
 
   logger?.info({ baseUrl: config.baseUrl }, "msp connect");
 
-  let session: Readonly<Session> | undefined;
-  const sessionProvider = async () => session;
+  let sessionRef: Readonly<Session> | undefined;
+  const sessionProvider = async () => sessionRef;
   const client = await MspClient.connect(config, sessionProvider);
 
   const setSession = (s: Readonly<Session>): void => {
-    session = s;
+    sessionRef = s;
   };
 
-  return { client, setSession };
+  const getSession = (): Readonly<Session> | undefined => sessionRef;
+  const getToken = (): string | undefined => sessionRef?.token;
+
+  return { client, setSession, getSession, getToken };
 }
 
 export async function validateMspConnection(
@@ -50,27 +55,52 @@ export async function validateMspConnection(
   logger?.info("msp health ok");
 }
 
+/**
+ * Authenticate with SIWE and return the Session.
+ * The user's address is available as `session.user.address`.
+ * Usage:
+ *   const session = await authenticateSIWE(walletClient, mspClient, domain, uri)
+ */
+export async function authenticateSIWE(
+  walletClient: WalletClient,
+  mspClient: MspClient,
+  siweDomain: string,
+  siweURI: string,
+  logger?: Logger
+): Promise<Readonly<Session>> {
+  const address =
+    walletClient.account?.address ?? (await walletClient.getAddresses())[0];
+  if (!address) throw new Error("WalletClient has no address");
+
+  const session = await mspClient.auth.SIWE(walletClient, siweDomain, siweURI);
+
+  logger?.debug(
+    { address: session.user.address, token: session.token },
+    "SIWE ✅"
+  );
+  return session;
+}
+
+/**
+ * Convenience wrapper used by existing processors:
+ * - runs SIWE against the connected MSP client
+ * - stores the returned session into the connection (so sessionProvider starts returning it)
+ * - returns an object for readability at call sites
+ */
 export async function authenticateWithSiwe(
   conn: MspConnection,
   env: Env,
   walletClient: WalletClient,
   logger?: Logger
-): Promise<MspAuthResult> {
+): Promise<Readonly<Session>> {
   const network = NETWORKS[env.network];
-  const address = (await walletClient.getAddresses())[0];
-  if (!address) {
-    throw new Error("WalletClient has no address");
-  }
-
-  logger?.info({ address }, "msp siwe start");
-  const session = await conn.client.auth.SIWE(
+  const session = await authenticateSIWE(
     walletClient,
+    conn.client,
     network.msp.siweDomain,
-    network.msp.siweUri
+    network.msp.siweUri,
+    logger
   );
-
   conn.setSession(session);
-
-  logger?.info({ address }, "msp siwe ok");
-  return { session, address };
+  return session;
 }

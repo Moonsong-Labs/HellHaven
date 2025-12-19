@@ -5,10 +5,15 @@ import {
   connectMsp,
   validateMspConnection,
 } from "../sdk/msp.js";
-import { initWalletFromPrivateKey, to0xPrivateKey } from "../sdk/wallet.js";
 import { NETWORKS } from "../networks.js";
-import { nextPrivateKey } from "../privateKeys.js";
-import { nextWalletFromPool } from "../sdk/walletPool.js";
+import {
+  selectAccountIndex,
+  cacheAccountIndex,
+} from "../helpers/accountIndex.js";
+import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
+import { toError } from "../helpers/errors.js";
+import { readRequiredEnv } from "../helpers/env.js";
+import { createViemWallet } from "../sdk/viemWallet.js";
 
 type Done = (error?: Error) => void;
 
@@ -16,37 +21,9 @@ type ArtilleryEvents = Readonly<{
   emit: (type: string, name: string, value: number) => void;
 }>;
 
-type ArtilleryContext = Readonly<{
+type ArtilleryContext = {
   vars?: Record<string, unknown>;
-}>;
-
-function toError(err: unknown): Error {
-  if (err instanceof Error) {
-    return err;
-  }
-  return new Error(typeof err === "string" ? err : "Unknown error");
-}
-
-function readVarString(ctx: ArtilleryContext, key: string): string {
-  const v = ctx.vars?.[key];
-  if (typeof v !== "string" || v.length === 0) {
-    throw new Error(`Missing or invalid VU var: ${key}`);
-  }
-  return v;
-}
-
-function readPrivateKeyForVu(ctx: ArtilleryContext): string {
-  const fromVars = ctx.vars?.privateKey;
-  if (typeof fromVars === "string" && fromVars.length > 0) {
-    return fromVars;
-  }
-  const fallback = nextPrivateKey();
-  getLogger().warn(
-    { sourcePath: fallback.sourcePath },
-    "privateKey not provided by Artillery vars; using fallback from file"
-  );
-  return fallback.privateKey;
-}
+};
 
 async function maybeClose(obj: unknown): Promise<void> {
   if (!obj || typeof obj !== "object") {
@@ -76,14 +53,19 @@ export async function connectClients(
   try {
     const env = readEnv();
     const logger = getLogger();
-
-    const privateKeyRaw = readPrivateKeyForVu(context);
-    const privateKey = to0xPrivateKey(privateKeyRaw);
-
     const network = NETWORKS[env.network];
-    const { walletClient } = context.vars?.privateKey
-      ? initWalletFromPrivateKey(network, privateKey)
-      : nextWalletFromPool(network);
+    if (!context.vars) {
+      context.vars = {};
+    }
+    const vars = context.vars;
+
+    // Derive account from mnemonic + configured index mode.
+    const mnemonic = readRequiredEnv("TEST_MNEMONIC");
+    const selection = selectAccountIndex(vars);
+    cacheAccountIndex(vars, selection);
+    const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
+    const walletClient = createViemWallet(network, derived.account);
+
     const mspConn = await connectMsp(env, logger);
 
     const mspStart = Date.now();

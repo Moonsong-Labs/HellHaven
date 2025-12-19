@@ -44,7 +44,7 @@ Local notes:
 - `pnpm fmt:fix` — apply formatting
 - `pnpm lint` — check lint rules
 - `pnpm lint:fix` — apply safe lint fixes
-- `pnpm test` — build -> preflight -> artillery
+- `pnpm test` — build -> artillery
 - `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
 - `pnpm test:download` — file download load test (requires SIWE auth + FILE_KEY)
 
@@ -56,6 +56,16 @@ NETWORK=local pnpm test:msp-unauth
 
 ```bash
 NETWORK=local STORAGEHUB_PRIVATE_KEY=0x... pnpm test
+```
+
+Examples (local):
+
+```bash
+NETWORK=local pnpm test:msp-unauth
+```
+
+```bash
+LOG_LEVEL=info LOG_CONSOLE=true TEST_MNEMONIC="test test test test test test test test test test test junk" NETWORK=local pnpm test
 ```
 
 ## Logging
