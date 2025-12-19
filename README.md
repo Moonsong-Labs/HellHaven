@@ -29,10 +29,14 @@ Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts` and are co
 - **Local**: MSP `http://127.0.0.1:8080`, RPC `http://127.0.0.1:9888`
 
 Local notes:
-- `NETWORK=local` expects:
+- `NETWORK=local` matches the “normal” local StorageHub defaults when you boot a local network from the StorageHub repo with:
+  - `pnpm docker:start:solochain-evm:initialised`
+  - See StorageHub docs: [Spawning solochain-evm-initialised fullnet](https://github.com/Moonsong-Labs/storage-hub/tree/main/test#spawning-solochain-evm-initialised-fullnet)
+- It assumes:
   - MSP at `http://127.0.0.1:8080`
   - EVM/Substrate RPC at `http://127.0.0.1:9888` / `ws://127.0.0.1:9888`
-  - SIWE domain/uri: `localhost:3001` / `http://localhost:3001`
+- **SIWE domain/uri**: these should be provided by the dApp doing SIWE (they are not “network” properties). For local testing, a dApp often runs on `localhost:3000` or `localhost:3001`.
+  - `localhost:3001` / `http://localhost:3001` is what the StorageHub repo’s `demo-app` (SDK examples) commonly uses.
 
 ## Commands
 
