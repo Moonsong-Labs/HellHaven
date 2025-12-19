@@ -31,7 +31,10 @@ export async function deriveAndPrint(
 ): Promise<void> {
   try {
     const logger = getLogger();
-    const vars = (context.vars ??= {});
+    if (!context.vars) {
+      context.vars = {};
+    }
+    const vars = context.vars;
 
     const mnemonic = readRequiredEnv("TEST_MNEMONIC");
     const selection = selectAccountIndex(vars);

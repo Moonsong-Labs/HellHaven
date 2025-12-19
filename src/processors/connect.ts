@@ -54,7 +54,10 @@ export async function connectClients(
     const env = readEnv();
     const logger = getLogger();
     const network = NETWORKS[env.network];
-    const vars = (context.vars ??= {});
+    if (!context.vars) {
+      context.vars = {};
+    }
+    const vars = context.vars;
 
     // Derive account from mnemonic + configured index mode.
     const mnemonic = readRequiredEnv("TEST_MNEMONIC");

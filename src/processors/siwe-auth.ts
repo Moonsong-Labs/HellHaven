@@ -41,7 +41,10 @@ export async function siweAuth(
     const env = readEnv();
     const network = NETWORKS[env.network];
 
-    const vars = (context.vars ??= {});
+    if (!context.vars) {
+      context.vars = {};
+    }
+    const vars = context.vars;
     const mnemonic = readRequiredEnv("TEST_MNEMONIC");
 
     // Select index to derive account
