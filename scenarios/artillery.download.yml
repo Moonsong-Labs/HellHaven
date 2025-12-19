@@ -1,0 +1,28 @@
+config:
+  target: "http://localhost"
+  processor: "../dist/src/processors/download.js"
+
+  phases:
+    - name: warmup
+      duration: 10
+      arrivalRate: 1
+
+    - name: ramp
+      duration: 20
+      arrivalRate: 1
+      rampTo: 10
+
+    - name: steady
+      duration: 40
+      arrivalRate: 10
+
+    - name: cooldown
+      duration: 10
+      arrivalRate: 2
+      rampTo: 1
+
+scenarios:
+  - name: download_file
+    flow:
+      - function: downloadFile
+
