@@ -11,16 +11,16 @@
     "lint": "biome lint .",
     "lint:fix": "biome lint . --write",
     "build": "tsc -p tsconfig.json",
-    "preflight": "pnpm exec tsx scripts/preflight.ts",
-    "test": "pnpm build && pnpm preflight && pnpm exec artillery run scenarios/artillery.yml",
+    "test": "pnpm build && pnpm exec artillery run scenarios/artillery.yml",
     "test:msp-unauth": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.msp-unauth.yml",
     "test:siwe:byIndex": "pnpm build && pnpm exec artillery run scenarios/siwe.byIndex.yml",
     "test:siwe:sequential": "pnpm build && pnpm exec artillery run scenarios/siwe.sequential.yml",
-    "test:siwe:random": "pnpm build && pnpm exec artillery run scenarios/siwe.random.yml"
+    "test:siwe:random": "pnpm build && pnpm exec artillery run scenarios/siwe.random.yml",
+    "test:siwe:auth:sequential": "pnpm build && pnpm exec artillery run scenarios/siwe.auth.sequential.yml"
   },
   "dependencies": {
-    "@storagehub-sdk/core": "0.3.4",
-    "@storagehub-sdk/msp-client": "0.3.4",
+    "@storagehub-sdk/core": "0.4.0",
+    "@storagehub-sdk/msp-client": "0.4.0",
     "artillery": "^2.0.0",
     "pino": "^10.1.0",
     "viem": "^2.42.1"
