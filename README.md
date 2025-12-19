@@ -40,20 +40,8 @@ Local notes:
 - `pnpm fmt:fix` — apply formatting
 - `pnpm lint` — check lint rules
 - `pnpm lint:fix` — apply safe lint fixes
-- `pnpm test` — build -> preflight -> artillery
+- `pnpm test` — build -> artillery
 - `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
-- `pnpm test:siwe:byIndex` — derive & print account (byIndex mode; requires `TEST_MNEMONIC`)
-- `pnpm test:siwe:sequential` — derive & print account (sequential mode; requires `TEST_MNEMONIC`)
-- `pnpm test:siwe:random` — derive & print account (random mode; requires `TEST_MNEMONIC`)
-
-Test mnemonic (for local testing only; never use with real funds):
-- `test test test test test test test test test test test junk`
-
-Example:
-
-```bash
-LOG_LEVEL=info LOG_CONSOLE=true TEST_MNEMONIC="test test test test test test test test test test test junk" pnpm test:siwe:sequential
-```
 
 Examples (local):
 
@@ -62,7 +50,7 @@ NETWORK=local pnpm test:msp-unauth
 ```
 
 ```bash
-NETWORK=local STORAGEHUB_PRIVATE_KEY=0x... pnpm test
+LOG_LEVEL=info LOG_CONSOLE=true TEST_MNEMONIC="test test test test test test test test test test test junk" NETWORK=local pnpm test
 ```
 
 ## Logging
@@ -108,23 +96,6 @@ Metrics emitted (counters + histograms):
 - `msp.health.ok`, `msp.health.ms`
 - `msp.info.ok`, `msp.info.ms`
 - `msp.req.err` (total request errors)
-
-## Per-VU private keys (Artillery payload)
-
-This test expects a per-VU `privateKey` variable from `config.payload` in `scenarios/artillery.yml`.
-
-1) Create `data/private_keys.csv` (ignored by git), based on the example:
-- `data/private_keys.example.csv`
-
-Notes:
-- `pnpm preflight` will use `STORAGEHUB_PRIVATE_KEY` **if set**, otherwise it will use the **first key** in `data/private_keys.csv`.
-- If Artillery does not inject `privateKey` into `context.vars` (depends on engine/runtime), the scenario will fall back to reading keys directly from `data/private_keys.csv` (round-robin).
-
-2) Run:
-
-```bash
-NETWORK=stagenet LOG_LEVEL=info pnpm test
-```
 
 ## Scenario output
 

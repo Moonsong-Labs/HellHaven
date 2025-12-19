@@ -1,5 +1,8 @@
 import { getLogger } from "../log.js";
-import { cacheAccountIndex, selectAccountIndex } from "../helpers/accountIndex.js";
+import {
+  cacheAccountIndex,
+  selectAccountIndex,
+} from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 
 type Done = (error?: Error) => void;
@@ -59,7 +62,11 @@ export async function deriveAndPrint(
     if (printPk) {
       if (!derived.privateKey) {
         logger.warn(
-          { index: selection.index, path: derived.derivation.path, address: derived.account.address },
+          {
+            index: selection.index,
+            path: derived.derivation.path,
+            address: derived.account.address,
+          },
           "derived account has no privateKey available to print"
         );
       } else {
@@ -91,5 +98,3 @@ export async function deriveAndPrint(
     throw error;
   }
 }
-
-

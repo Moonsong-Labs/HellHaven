@@ -15,5 +15,3 @@ scenarios:
   - name: siwe_byIndex_derive_and_print
     flow:
       - function: deriveAndPrint
-
-

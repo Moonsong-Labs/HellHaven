@@ -15,7 +15,8 @@ export type ContextVars = Record<string, unknown> | undefined;
 let sequentialCounter = 0;
 
 function asInt(value: unknown): number | undefined {
-  if (typeof value === "number") return Number.isInteger(value) ? value : undefined;
+  if (typeof value === "number")
+    return Number.isInteger(value) ? value : undefined;
   if (typeof value === "string") {
     const n = Number(value);
     return Number.isInteger(n) ? n : undefined;
@@ -87,7 +88,11 @@ export function selectAccountIndex(vars: ContextVars): AccountIndexSelection {
       }
     })();
     const cachedSource = readString(vars, "__accountIndexSource") ?? "cached";
-    return { mode: cachedMode, index: cached, source: `cached (${cachedSource})` };
+    return {
+      mode: cachedMode,
+      index: cached,
+      source: `cached (${cachedSource})`,
+    };
   }
 
   const mode = normalizeMode(readString(vars, "ACCOUNT_MODE"));
@@ -139,10 +144,11 @@ export function selectAccountIndex(vars: ContextVars): AccountIndexSelection {
   };
 }
 
-export function cacheAccountIndex(vars: Record<string, unknown>, selection: AccountIndexSelection): void {
+export function cacheAccountIndex(
+  vars: Record<string, unknown>,
+  selection: AccountIndexSelection
+): void {
   vars.__accountIndex = selection.index;
   vars.__accountMode = selection.mode;
   vars.__accountIndexSource = selection.source;
 }
-
-
