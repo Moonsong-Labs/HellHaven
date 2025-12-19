@@ -1,5 +1,5 @@
 export type Env = Readonly<{
-  network: "testnet" | "stagenet";
+  network: "testnet" | "stagenet" | "local";
 }>;
 
 function getRequiredEnv(key: string): string {
@@ -12,9 +12,13 @@ function getRequiredEnv(key: string): string {
 
 export function readEnv(): Env {
   const networkRaw = getRequiredEnv("NETWORK");
-  if (networkRaw !== "testnet" && networkRaw !== "stagenet") {
+  if (
+    networkRaw !== "testnet" &&
+    networkRaw !== "stagenet" &&
+    networkRaw !== "local"
+  ) {
     throw new Error(
-      `Invalid NETWORK: ${networkRaw} (expected 'testnet' or 'stagenet')`
+      `Invalid NETWORK: ${networkRaw} (expected 'testnet', 'stagenet' or 'local')`
     );
   }
   const network = networkRaw;
