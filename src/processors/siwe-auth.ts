@@ -10,8 +10,8 @@ import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import { toError } from "../helpers/errors.js";
 import { readRequiredEnv } from "../helpers/env.js";
 import { authenticateSIWE } from "../sdk/msp.js";
+import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { MspClient } from "@storagehub-sdk/msp-client";
-import type { HttpClientConfig } from "@storagehub-sdk/core";
 import { createViemWallet } from "../sdk/viemWallet.js";
 
 type Done = (error?: Error) => void;
@@ -53,12 +53,7 @@ export async function siweAuth(
     const walletClient = createViemWallet(network, derived.account);
 
     // Create MspClient
-    const config = {
-      baseUrl: network.msp.baseUrl,
-      ...(typeof network.msp.timeoutMs === "number"
-        ? { timeoutMs: network.msp.timeoutMs }
-        : {}),
-    } satisfies HttpClientConfig;
+    const config = buildMspHttpClientConfig(network);
     const mspClient = await MspClient.connect(config);
 
     const start = Date.now();

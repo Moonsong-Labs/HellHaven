@@ -4,6 +4,7 @@ import type { Env } from "../config.js";
 import type { Logger } from "pino";
 import { NETWORKS } from "../networks.js";
 import type { WalletClient } from "viem";
+import { buildMspHttpClientConfig } from "./mspHttpConfig.js";
 
 export type MspConnection = Readonly<{
   client: MspClient;
@@ -26,12 +27,7 @@ export async function connectMsp(
   logger?: Logger
 ): Promise<MspConnection> {
   const network = NETWORKS[env.network];
-  const { msp } = network;
-
-  const config = {
-    baseUrl: msp.baseUrl,
-    ...(typeof msp.timeoutMs === "number" ? { timeoutMs: msp.timeoutMs } : {}),
-  } satisfies HttpClientConfig;
+  const config = buildMspHttpClientConfig(network);
 
   logger?.info({ baseUrl: config.baseUrl }, "msp connect");
 
