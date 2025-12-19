@@ -29,10 +29,14 @@ Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts` and are co
 - **Local**: MSP `http://127.0.0.1:8080`, RPC `http://127.0.0.1:9888`
 
 Local notes:
-- `NETWORK=local` expects:
+- `NETWORK=local` matches the “normal” local StorageHub defaults when you boot a local network from the StorageHub repo with:
+  - `pnpm docker:start:solochain-evm:initialised`
+  - See StorageHub docs: [Spawning solochain-evm-initialised fullnet](https://github.com/Moonsong-Labs/storage-hub/tree/main/test#spawning-solochain-evm-initialised-fullnet)
+- It assumes:
   - MSP at `http://127.0.0.1:8080`
   - EVM/Substrate RPC at `http://127.0.0.1:9888` / `ws://127.0.0.1:9888`
-  - SIWE domain/uri: `localhost:3001` / `http://localhost:3001`
+- **SIWE domain/uri**: these should be provided by the dApp doing SIWE (they are not “network” properties). For local testing, a dApp often runs on `localhost:3000` or `localhost:3001`.
+  - `localhost:3001` / `http://localhost:3001` is what the StorageHub repo’s `demo-app` (SDK examples) commonly uses.
 
 ## Commands
 
@@ -42,6 +46,17 @@ Local notes:
 - `pnpm lint:fix` — apply safe lint fixes
 - `pnpm test` — build -> artillery
 - `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
+- `pnpm test:download` — file download load test (requires SIWE auth + FILE_KEY)
+
+Examples (local):
+
+```bash
+NETWORK=local pnpm test:msp-unauth
+```
+
+```bash
+NETWORK=local STORAGEHUB_PRIVATE_KEY=0x... pnpm test
+```
 
 Examples (local):
 
@@ -96,6 +111,47 @@ Metrics emitted (counters + histograms):
 - `msp.health.ok`, `msp.health.ms`
 - `msp.info.ok`, `msp.info.ms`
 - `msp.req.err` (total request errors)
+
+## Download load test
+
+This test authenticates via SIWE and downloads a file from the MSP, measuring throughput and latency.
+
+Required env vars:
+- `NETWORK` (`testnet` or `stagenet`)
+- `FILE_KEY` (the file key/hash to download)
+
+Run:
+
+```bash
+NETWORK=stagenet FILE_KEY=<your-file-key> pnpm test:download
+```
+
+Knobs (optional):
+- `ARTILLERY_WORKERS=4` (parallel local processes)
+- `LOG_LEVEL=info` (see Logging section)
+
+Metrics emitted:
+- `download.siwe.ok`, `download.siwe.ms` (SIWE auth)
+- `download.file.ok`, `download.file.ms` (file download)
+- `download.bytes` (total bytes downloaded per request)
+- `download.siwe.err`, `download.file.err` (error counters)
+
+## Per-VU private keys (Artillery payload)
+
+This test expects a per-VU `privateKey` variable from `config.payload` in `scenarios/artillery.yml`.
+
+1) Create `data/private_keys.csv` (ignored by git), based on the example:
+- `data/private_keys.example.csv`
+
+Notes:
+- `pnpm preflight` will use `STORAGEHUB_PRIVATE_KEY` **if set**, otherwise it will use the **first key** in `data/private_keys.csv`.
+- If Artillery does not inject `privateKey` into `context.vars` (depends on engine/runtime), the scenario will fall back to reading keys directly from `data/private_keys.csv` (round-robin).
+
+2) Run:
+
+```bash
+NETWORK=stagenet LOG_LEVEL=info pnpm test
+```
 
 ## Scenario output
 

@@ -16,7 +16,8 @@
     "test:siwe:byIndex": "pnpm build && pnpm exec artillery run scenarios/siwe.byIndex.yml",
     "test:siwe:sequential": "pnpm build && pnpm exec artillery run scenarios/siwe.sequential.yml",
     "test:siwe:random": "pnpm build && pnpm exec artillery run scenarios/siwe.random.yml",
-    "test:siwe:auth:sequential": "pnpm build && pnpm exec artillery run scenarios/siwe.auth.sequential.yml"
+    "test:siwe:auth:sequential": "pnpm build && pnpm exec artillery run scenarios/siwe.auth.sequential.yml",
+    "test:download": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.download.yml"
   },
   "dependencies": {
     "@storagehub-sdk/core": "0.4.0",
