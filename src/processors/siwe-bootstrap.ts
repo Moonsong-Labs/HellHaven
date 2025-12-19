@@ -4,6 +4,7 @@ import {
   selectAccountIndex,
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
+import { toError } from "../helpers/errors.js";
 
 type Done = (error?: Error) => void;
 
@@ -14,11 +15,6 @@ type ArtilleryEvents = Readonly<{
 type ArtilleryContext = {
   vars?: Record<string, unknown>;
 };
-
-function toError(err: unknown): Error {
-  if (err instanceof Error) return err;
-  return new Error(typeof err === "string" ? err : "Unknown error");
-}
 
 function readRequiredEnv(key: string): string {
   const v = process.env[key];

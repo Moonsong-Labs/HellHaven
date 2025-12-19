@@ -7,6 +7,7 @@ import {
   cacheAccountIndex,
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
+import { toError } from "../helpers/errors.js";
 import { authenticateSIWE } from "../sdk/msp.js";
 import { MspClient } from "@storagehub-sdk/msp-client";
 import type { HttpClientConfig } from "@storagehub-sdk/core";
@@ -21,11 +22,6 @@ type ArtilleryEvents = Readonly<{
 type ArtilleryContext = {
   vars?: Record<string, unknown>;
 };
-
-function toError(err: unknown): Error {
-  if (err instanceof Error) return err;
-  return new Error(typeof err === "string" ? err : "Unknown error");
-}
 
 function readRequiredEnv(key: string): string {
   const v = process.env[key];
