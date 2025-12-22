@@ -1,6 +1,11 @@
 config:
   target: "http://localhost"
   processor: "../dist/src/processors/download.js"
+  variables:
+    # Account index selection (mnemonic-based):
+    ACCOUNT_MODE: sequential
+    ACCOUNT_INDEX_START: 0
+    ACCOUNT_INDEX_COUNT: 1000
 
   phases:
     - name: warmup

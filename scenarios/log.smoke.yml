@@ -1,0 +1,13 @@
+config:
+  target: "http://localhost"
+  processor: "../dist/src/processors/log-smoke.js"
+  phases:
+    - name: smoke
+      duration: 1
+      arrivalRate: 1
+scenarios:
+  - name: log smoke
+    flow:
+      - function: logSmoke
+
+

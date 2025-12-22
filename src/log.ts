@@ -107,14 +107,22 @@ export function getLogger(): Logger {
   }
 
   const cfg = readLogConfig();
-  const streams: Array<{ stream: pino.DestinationStream }> = [];
+  // NOTE: When using pino.multistream, each stream has its own level filter.
+  // If you omit it, pino defaults that stream to "info", which would drop debug logs.
+  const streams: Array<{ stream: pino.DestinationStream; level: LogLevel }> = [];
 
   if (cfg.consoleEnabled) {
-    streams.push({ stream: pino.destination({ dest: 1, sync: false }) });
+    streams.push({
+      stream: pino.destination({ dest: 1, sync: false }),
+      level: cfg.level,
+    });
   }
   if (cfg.filePath) {
     streams.push({
-      stream: pino.destination({ dest: cfg.filePath, sync: false }),
+      // Artillery runs can end quickly and may not flush async streams.
+      // Use sync writes for file logs to avoid empty/truncated JSONL.
+      stream: pino.destination({ dest: cfg.filePath, sync: true }),
+      level: cfg.level,
     });
   }
 

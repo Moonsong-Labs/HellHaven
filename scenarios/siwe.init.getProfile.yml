@@ -1,0 +1,26 @@
+config:
+  # Base URL used by the built-in HTTP engine (not used in this test)
+  target: "http://localhost"
+  processor: "../dist/src/processors/siwe-init.js"
+  variables:
+    # Account index selection:
+    # - byIndex: all VUs use ACCOUNT_INDEX unless payload var `accountIndex` is provided
+    # - sequential/random: uses START/COUNT
+    ACCOUNT_MODE: byIndex
+    # Fallback if allocator isn't used (e.g. running Artillery directly without pnpm script)
+    ACCOUNT_INDEX: 0
+  phases:
+    - name: init-and-actions
+      duration: 10
+      arrivalRate: 5
+scenarios:
+  - name: siwe init (2 steps) then getProfile
+    flow:
+      - function: initPickIndexAndDerivePrivateKey
+      - function: initSiwe
+      # Let's retrieve the user's profile 2 times (using the same VU)
+      - loop:
+          - function: actionGetProfile
+        count: 2
+
+

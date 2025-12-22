@@ -12,10 +12,16 @@ config:
     - name: connect
       duration: 10
       arrivalRate: 10
+  before:
+    flow:
+      - function: CreateAccount ---> private key
 
 scenarios:
   - name: sdk_connect
+    before:
+      - function: CreateAccount ---> private key
+      - function: SIWE --> Token
     flow:
-      - function: connectClients
+      - function: Upload --> MspClient(token) ViemWallet(privateKey)
 
 

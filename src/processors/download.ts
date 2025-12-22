@@ -2,17 +2,20 @@ import { Readable } from "node:stream";
 import { readEnv } from "../config.js";
 import { getLogger } from "../log.js";
 import { authenticateWithSiwe, connectMsp } from "../sdk/msp.js";
-import { initWalletFromPrivateKey, to0xPrivateKey } from "../sdk/wallet.js";
 import { NETWORKS } from "../networks.js";
-import { nextPrivateKey } from "../privateKeys.js";
+import { cacheAccountIndex, selectAccountIndex } from "../helpers/accountIndex.js";
+import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
+import { toError } from "../helpers/errors.js";
+import { readRequiredEnv } from "../helpers/env.js";
+import { createViemWallet } from "../sdk/viemWallet.js";
 
 type ArtilleryEvents = Readonly<{
   emit: (type: string, name: string, value: number) => void;
 }>;
 
-type ArtilleryContext = Readonly<{
+type ArtilleryContext = {
   vars?: Record<string, unknown>;
-}>;
+};
 
 function getFileKey(): string {
   const key = process.env.FILE_KEY;
@@ -20,6 +23,11 @@ function getFileKey(): string {
     throw new Error("FILE_KEY env var is required");
   }
   return key;
+}
+
+function ensureVars(context: ArtilleryContext): Record<string, unknown> {
+  if (!context.vars) context.vars = {};
+  return context.vars;
 }
 
 export async function downloadFile(
@@ -31,15 +39,13 @@ export async function downloadFile(
   const network = NETWORKS[env.network];
   const fileKey = getFileKey();
 
-  // Get private key (from Artillery vars or fallback)
-  const privateKeyRaw =
-    typeof context.vars?.privateKey === "string" &&
-    context.vars.privateKey.length > 0
-      ? context.vars.privateKey
-      : nextPrivateKey().privateKey;
-
-  const privateKey = to0xPrivateKey(privateKeyRaw);
-  const { walletClient } = initWalletFromPrivateKey(network, privateKey);
+  // Init: derive account from TEST_MNEMONIC + selected index (ACCOUNT_MODE vars).
+  const vars = ensureVars(context);
+  const mnemonic = readRequiredEnv("TEST_MNEMONIC");
+  const selection = selectAccountIndex(vars);
+  cacheAccountIndex(vars, selection);
+  const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
+  const walletClient = createViemWallet(network, derived.account);
 
   // Connect and authenticate
   const conn = await connectMsp(env, logger);
@@ -51,8 +57,9 @@ export async function downloadFile(
     events.emit("histogram", "download.siwe.ms", Date.now() - siweStart);
   } catch (err) {
     events.emit("counter", "download.siwe.err", 1);
-    logger.error({ err }, "siwe failed");
-    throw err;
+    const error = toError(err);
+    logger.error({ err: error }, "siwe failed");
+    throw error;
   }
 
   // Download file
@@ -79,7 +86,8 @@ export async function downloadFile(
     logger.info({ fileKey, totalBytes }, "download complete");
   } catch (err) {
     events.emit("counter", "download.file.err", 1);
-    logger.error({ err, fileKey }, "download failed");
-    throw err;
+    const error = toError(err);
+    logger.error({ err: error, fileKey }, "download failed");
+    throw error;
   }
 }
