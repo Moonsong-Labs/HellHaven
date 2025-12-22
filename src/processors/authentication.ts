@@ -1,0 +1,102 @@
+import { MspClient, type Session } from "@storagehub-sdk/msp-client";
+import { readEnv } from "../config.js";
+import { getLogger } from "../log.js";
+import { NETWORKS } from "../networks.js";
+import { toError } from "../helpers/errors.js";
+import { createViemWallet } from "../sdk/viemWallet.js";
+import { authenticateSIWE } from "../sdk/msp.js";
+import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
+import { privateKeyToAccount } from "viem/accounts";
+import {
+  ensureVars,
+  requireVarString,
+  type ArtilleryContext,
+  type ArtilleryEvents,
+  type Done,
+} from "../helpers/artillery.js";
+import { ensure0xPrefix } from "../helpers/validation.js";
+
+/**
+ * Authentication step: SIWE
+ *
+ * Requirements:
+ * - `context.vars.privateKey` (0x-prefixed)
+ *
+ * Side effects:
+ * - sets `__siweToken` and `__siweSession` in context.vars
+ */
+export async function SIWE(
+  context: ArtilleryContext,
+  events: ArtilleryEvents,
+  done?: Done
+): Promise<void> {
+  const start = Date.now();
+  try {
+    const logger = getLogger();
+    const env = readEnv();
+    const network = NETWORKS[env.network];
+    const vars = ensureVars(context);
+
+    const pkRaw = requireVarString(vars, "privateKey");
+    const pk = ensure0xPrefix(pkRaw, 32).toLowerCase() as `0x${string}`;
+
+    const account = privateKeyToAccount(pk);
+    const walletClient = createViemWallet(network, account);
+
+    const config = buildMspHttpClientConfig(network);
+    const mspClient = await MspClient.connect(config);
+
+    const session = await authenticateSIWE(
+      walletClient,
+      mspClient,
+      network.msp.siweDomain,
+      network.msp.siweUri,
+      logger
+    );
+
+    const sessionLite: Readonly<Pick<Session, "token" | "user">> = {
+      token: session.token,
+      user: session.user,
+    };
+    vars.__siweToken = session.token;
+    vars.__siweSession = sessionLite;
+
+    logger.debug({ address: session.user.address }, "SIWE authenticated");
+
+    events.emit("counter", "auth.siwe.ok", 1);
+    events.emit("histogram", "auth.siwe.ms", Date.now() - start);
+    done?.();
+  } catch (err) {
+    events.emit("counter", "auth.siwe.err", 1);
+    done?.(toError(err));
+  }
+}
+
+/**
+ * Authentication step: SIWX (dummy placeholder)
+ *
+ * This is intentionally a no-op/dummy function so we can evolve it later without
+ * changing the test flow structure.
+ *
+ * Side effects:
+ * - sets `__siwxToken` in context.vars
+ */
+export async function SIWX(
+  context: ArtilleryContext,
+  events: ArtilleryEvents,
+  done?: Done
+): Promise<void> {
+  try {
+    const vars = ensureVars(context);
+    const now = Date.now();
+    // Dummy token, not used for real auth.
+    vars.__siwxToken = `siwx_dummy_${now}`;
+    events.emit("counter", "auth.siwx.ok", 1);
+    done?.();
+  } catch (err) {
+    events.emit("counter", "auth.siwx.err", 1);
+    done?.(toError(err));
+  }
+}
+
+

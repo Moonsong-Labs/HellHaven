@@ -1,7 +1,7 @@
 config:
   # Base URL used by the built-in HTTP engine (not used in this test)
   target: "http://localhost"
-  processor: "../dist/src/processors/siwe-init.js"
+  processor: "../dist/src/processors/index.js"
   variables:
     # Account index selection:
     # - byIndex: all VUs use ACCOUNT_INDEX unless payload var `accountIndex` is provided
@@ -14,10 +14,10 @@ config:
       duration: 10
       arrivalRate: 5
 scenarios:
-  - name: siwe init (2 steps) then getProfile
+  - name: siwe init (derive account + SIWE) then getProfile
     flow:
-      - function: initPickIndexAndDerivePrivateKey
-      - function: initSiwe
+      - function: deriveAccount
+      - function: SIWE
       # Let's retrieve the user's profile 2 times (using the same VU)
       - loop:
           - function: actionGetProfile
