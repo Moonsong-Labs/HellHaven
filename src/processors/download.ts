@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { readEnv } from "../config.js";
 import { getLogger } from "../log.js";
-import { authenticateWithSiwe, connectMsp } from "../sdk/mspConnection.js";
+import { MspClient } from "@storagehub-sdk/msp-client";
 import { NETWORKS } from "../networks.js";
 import {
   cacheAccountIndex,
@@ -11,6 +11,7 @@ import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import { toError } from "../helpers/errors.js";
 import { readRequiredEnv } from "../helpers/env.js";
 import { createViemWallet } from "../sdk/viemWallet.js";
+import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { createEmitter } from "../helpers/metrics.js";
 import {
   ensureVars,
@@ -45,11 +46,17 @@ export async function downloadFile(
   const walletClient = createViemWallet(network, derived.account);
 
   // Connect and authenticate
-  const conn = await connectMsp(env, logger);
+  const config = buildMspHttpClientConfig(network);
+  const client = await MspClient.connect(config);
 
   const siweStart = Date.now();
   try {
-    await authenticateWithSiwe(conn, env, walletClient, logger);
+    const session = await client.auth.SIWE(
+      walletClient,
+      network.msp.siweDomain,
+      network.msp.siweUri
+    );
+    client.setSessionProvider(async () => session);
     m.counter("download.siwe.ok", 1);
     m.histogram("download.siwe.ms", Date.now() - siweStart);
   } catch (err) {
@@ -62,7 +69,7 @@ export async function downloadFile(
   // Download file
   const dlStart = Date.now();
   try {
-    const file = await conn.client.files.downloadFile(fileKey);
+    const file = await client.files.downloadFile(fileKey);
     if (!file?.stream) {
       throw new Error("downloadFile returned no stream");
     }
