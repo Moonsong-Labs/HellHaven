@@ -1,6 +1,6 @@
 config:
   target: "http://localhost"
-  processor: "../dist/src/processors/download.js"
+  processor: "../dist/src/processors/index.js"
   variables:
     # Account index selection (mnemonic-based):
     ACCOUNT_MODE: sequential
