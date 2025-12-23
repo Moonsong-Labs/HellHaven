@@ -4,7 +4,6 @@ import { getLogger } from "../log.js";
 import { NETWORKS } from "../networks.js";
 import { toError } from "../helpers/errors.js";
 import { createViemWallet } from "../sdk/viemWallet.js";
-import { authenticateSIWE } from "../sdk/msp.js";
 import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { privateKeyToAccount } from "viem/accounts";
 import {
@@ -25,7 +24,7 @@ import { createEmitter } from "../helpers/metrics.js";
  * - `context.vars.privateKey` (0x-prefixed)
  *
  * Side effects:
- * - sets `__siweToken` and `__siweSession` in context.vars
+ * - sets `__siweSession` in context.vars
  */
 export async function SIWE(
   context: ArtilleryContext,
@@ -51,21 +50,14 @@ export async function SIWE(
     const config = buildMspHttpClientConfig(network);
     const mspClient = await MspClient.connect(config);
 
-    const session = await authenticateSIWE(
+    // Use SDK directly for SIWE auth.
+    const session = await mspClient.auth.SIWE(
       walletClient,
-      mspClient,
       network.msp.siweDomain,
-      network.msp.siweUri,
-      logger
+      network.msp.siweUri
     );
-
-    const sessionLite: Readonly<Pick<Session, "token" | "user">> = {
-      token: session.token,
-      user: session.user,
-    };
     persistVars(context, {
-      __siweToken: session.token,
-      __siweSession: sessionLite,
+      __siweSession: session satisfies Readonly<Session>,
     });
 
     logger.debug({ address: session.user.address }, "SIWE authenticated");
