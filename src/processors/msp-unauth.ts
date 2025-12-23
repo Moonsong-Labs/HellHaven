@@ -5,14 +5,11 @@ import { getLogger } from "../log.js";
 import { readEnv } from "../config.js";
 import { NETWORKS } from "../networks.js";
 import type { Env } from "../config.js";
-
-type ArtilleryEvents = Readonly<{
-  emit: (type: string, name: string, value: number) => void;
-}>;
-
-type ArtilleryContext = Readonly<{
-  vars?: Record<string, unknown>;
-}>;
+import { createEmitter } from "../helpers/metrics.js";
+import type {
+  ArtilleryContext,
+  ArtilleryEvents,
+} from "../helpers/artillery.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +43,7 @@ export async function mspUnauthLoad(
   context: ArtilleryContext,
   events: ArtilleryEvents
 ): Promise<void> {
+  const m = createEmitter(context, events);
   const logger = getLogger();
   const env = readEnv();
 
@@ -54,10 +52,10 @@ export async function mspUnauthLoad(
   const healthStart = Date.now();
   try {
     await client.info.getHealth();
-    events.emit("counter", "msp.health.ok", 1);
-    events.emit("histogram", "msp.health.ms", Date.now() - healthStart);
+    m.counter("msp.health.ok", 1);
+    m.histogram("msp.health.ms", Date.now() - healthStart);
   } catch (err) {
-    events.emit("counter", "msp.req.err", 1);
+    m.counter("msp.req.err", 1);
     logger.debug({ err }, "msp unauth request error");
   }
 
@@ -66,10 +64,10 @@ export async function mspUnauthLoad(
   const infoStart = Date.now();
   try {
     await client.info.getInfo();
-    events.emit("counter", "msp.info.ok", 1);
-    events.emit("histogram", "msp.info.ms", Date.now() - infoStart);
+    m.counter("msp.info.ok", 1);
+    m.histogram("msp.info.ms", Date.now() - infoStart);
   } catch (err) {
-    events.emit("counter", "msp.req.err", 1);
+    m.counter("msp.req.err", 1);
     logger.debug({ err }, "msp unauth request error");
   }
 }

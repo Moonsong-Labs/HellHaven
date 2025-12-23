@@ -53,5 +53,3 @@ export function createEmitter(
 
   return { counter, histogram };
 }
-
-

@@ -39,5 +39,3 @@ export async function unmuteMetrics(
     done?.(toError(err));
   }
 }
-
-

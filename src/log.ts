@@ -109,7 +109,8 @@ export function getLogger(): Logger {
   const cfg = readLogConfig();
   // NOTE: When using pino.multistream, each stream has its own level filter.
   // If you omit it, pino defaults that stream to "info", which would drop debug logs.
-  const streams: Array<{ stream: pino.DestinationStream; level: LogLevel }> = [];
+  const streams: Array<{ stream: pino.DestinationStream; level: LogLevel }> =
+    [];
 
   if (cfg.consoleEnabled) {
     streams.push({
