@@ -1,21 +1,22 @@
 import { Readable } from "node:stream";
 import { readEnv } from "../config.js";
 import { getLogger } from "../log.js";
-import { authenticateWithSiwe, connectMsp } from "../sdk/msp.js";
+import { authenticateWithSiwe, connectMsp } from "../sdk/mspConnection.js";
 import { NETWORKS } from "../networks.js";
-import { cacheAccountIndex, selectAccountIndex } from "../helpers/accountIndex.js";
+import {
+  cacheAccountIndex,
+  selectAccountIndex,
+} from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import { toError } from "../helpers/errors.js";
 import { readRequiredEnv } from "../helpers/env.js";
 import { createViemWallet } from "../sdk/viemWallet.js";
-
-type ArtilleryEvents = Readonly<{
-  emit: (type: string, name: string, value: number) => void;
-}>;
-
-type ArtilleryContext = {
-  vars?: Record<string, unknown>;
-};
+import { createEmitter } from "../helpers/metrics.js";
+import {
+  ensureVars,
+  type ArtilleryContext,
+  type ArtilleryEvents,
+} from "../helpers/artillery.js";
 
 function getFileKey(): string {
   const key = process.env.FILE_KEY;
@@ -25,15 +26,11 @@ function getFileKey(): string {
   return key;
 }
 
-function ensureVars(context: ArtilleryContext): Record<string, unknown> {
-  if (!context.vars) context.vars = {};
-  return context.vars;
-}
-
 export async function downloadFile(
   context: ArtilleryContext,
   events: ArtilleryEvents
 ): Promise<void> {
+  const m = createEmitter(context, events);
   const logger = getLogger();
   const env = readEnv();
   const network = NETWORKS[env.network];
@@ -53,10 +50,10 @@ export async function downloadFile(
   const siweStart = Date.now();
   try {
     await authenticateWithSiwe(conn, env, walletClient, logger);
-    events.emit("counter", "download.siwe.ok", 1);
-    events.emit("histogram", "download.siwe.ms", Date.now() - siweStart);
+    m.counter("download.siwe.ok", 1);
+    m.histogram("download.siwe.ms", Date.now() - siweStart);
   } catch (err) {
-    events.emit("counter", "download.siwe.err", 1);
+    m.counter("download.siwe.err", 1);
     const error = toError(err);
     logger.error({ err: error }, "siwe failed");
     throw error;
@@ -80,12 +77,12 @@ export async function downloadFile(
       totalBytes += (chunk as Buffer).length;
     }
 
-    events.emit("counter", "download.file.ok", 1);
-    events.emit("histogram", "download.file.ms", Date.now() - dlStart);
-    events.emit("histogram", "download.bytes", totalBytes);
+    m.counter("download.file.ok", 1);
+    m.histogram("download.file.ms", Date.now() - dlStart);
+    m.histogram("download.bytes", totalBytes);
     logger.info({ fileKey, totalBytes }, "download complete");
   } catch (err) {
-    events.emit("counter", "download.file.err", 1);
+    m.counter("download.file.err", 1);
     const error = toError(err);
     logger.error({ err: error, fileKey }, "download failed");
     throw error;
