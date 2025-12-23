@@ -29,5 +29,11 @@ config:
 scenarios:
   - name: download_file
     flow:
+      # Init (muted): derive + SIWE without polluting summary metrics
+      - function: muteMetrics
+      - function: deriveAccount
+      - function: SIWE
+      - function: unmuteMetrics
+      # Action
       - function: downloadFile
 

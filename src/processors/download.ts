@@ -1,31 +1,18 @@
 import { Readable } from "node:stream";
 import { readEnv } from "../config.js";
 import { getLogger } from "../log.js";
-import { MspClient } from "@storagehub-sdk/msp-client";
+import { MspClient, type Session } from "@storagehub-sdk/msp-client";
 import { NETWORKS } from "../networks.js";
-import {
-  cacheAccountIndex,
-  selectAccountIndex,
-} from "../helpers/accountIndex.js";
-import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import { toError } from "../helpers/errors.js";
 import { readRequiredEnv } from "../helpers/env.js";
-import { createViemWallet } from "../sdk/viemWallet.js";
 import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { createEmitter } from "../helpers/metrics.js";
 import {
   ensureVars,
+  getPersistedVar,
   type ArtilleryContext,
   type ArtilleryEvents,
 } from "../helpers/artillery.js";
-
-function getFileKey(): string {
-  const key = process.env.FILE_KEY;
-  if (!key) {
-    throw new Error("FILE_KEY env var is required");
-  }
-  return key;
-}
 
 export async function downloadFile(
   context: ArtilleryContext,
@@ -35,36 +22,14 @@ export async function downloadFile(
   const logger = getLogger();
   const env = readEnv();
   const network = NETWORKS[env.network];
-  const fileKey = getFileKey();
+  const fileKey = readRequiredEnv("FILE_KEY");
 
-  // Init: derive account from TEST_MNEMONIC + selected index (ACCOUNT_MODE vars).
-  const vars = ensureVars(context);
-  const mnemonic = readRequiredEnv("TEST_MNEMONIC");
-  const selection = selectAccountIndex(vars);
-  cacheAccountIndex(vars, selection);
-  const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
-  const walletClient = createViemWallet(network, derived.account);
+  ensureVars(context);
+  const session = getPersistedVar(context, "__siweSession") as Session;
 
-  // Connect and authenticate
+  // Connect using a session provider backed by context vars.
   const config = buildMspHttpClientConfig(network);
-  const client = await MspClient.connect(config);
-
-  const siweStart = Date.now();
-  try {
-    const session = await client.auth.SIWE(
-      walletClient,
-      network.msp.siweDomain,
-      network.msp.siweUri
-    );
-    client.setSessionProvider(async () => session);
-    m.counter("download.siwe.ok", 1);
-    m.histogram("download.siwe.ms", Date.now() - siweStart);
-  } catch (err) {
-    m.counter("download.siwe.err", 1);
-    const error = toError(err);
-    logger.error({ err: error }, "siwe failed");
-    throw error;
-  }
+  const client = await MspClient.connect(config, async () => session);
 
   // Download file
   const dlStart = Date.now();
