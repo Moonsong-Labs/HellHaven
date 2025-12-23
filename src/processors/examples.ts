@@ -67,5 +67,3 @@ export async function actionGetProfile(
     done?.(toError(err));
   }
 }
-
-
