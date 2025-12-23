@@ -15,8 +15,7 @@
     "run:with-logs": "pnpm build && pnpm with-logs",
     "test:run": "pnpm run:with-logs artillery run",
 
-    "test": "pnpm test:examples.getProfile",
-    "test:msp-unauth": "pnpm run:with-logs pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.msp-unauth.yml",
+    "test:msp-unauth": "pnpm test:run scenarios/artillery.msp-unauth.yml",
     "test:examples.getProfile": "pnpm test:run scenarios/examples.getProfile.yml",
     "test:download": "pnpm test:run scenarios/download.yml"
   },

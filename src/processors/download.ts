@@ -8,7 +8,6 @@ import { readRequiredEnv } from "../helpers/env.js";
 import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { createEmitter } from "../helpers/metrics.js";
 import {
-  ensureVars,
   getPersistedVar,
   type ArtilleryContext,
   type ArtilleryEvents,
@@ -24,10 +23,7 @@ export async function downloadFile(
   const network = NETWORKS[env.network];
   const fileKey = readRequiredEnv("FILE_KEY");
 
-  ensureVars(context);
   const session = getPersistedVar(context, "__siweSession") as Session;
-
-  // Connect using a session provider backed by context vars.
   const config = buildMspHttpClientConfig(network);
   const client = await MspClient.connect(config, async () => session);
 

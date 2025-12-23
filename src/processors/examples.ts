@@ -1,18 +1,18 @@
 import { MspClient, type Session } from "@storagehub-sdk/msp-client";
-import { parseNetworkName } from "../config.js";
 import { getLogger } from "../log.js";
 import { NETWORKS } from "../networks.js";
 import { toError } from "../helpers/errors.js";
 import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import {
   ensureVars,
-  ensureScenarioVars,
+  getPersistedVar,
   requireVarString,
   type ArtilleryContext,
   type ArtilleryEvents,
   type Done,
 } from "../helpers/artillery.js";
 import { createEmitter } from "../helpers/metrics.js";
+import { readEnv } from "../config.js";
 
 // Re-export an "init SIWE" helper for example scenarios.
 export { SIWE as initSiwe } from "./authentication.js";
@@ -32,23 +32,14 @@ export async function actionGetProfile(
   const start = Date.now();
   try {
     const m = createEmitter(context, events);
-    const vars = ensureVars(context);
-    const scenarioVars = ensureScenarioVars(context);
-    const networkName = parseNetworkName(
-      process.env.NETWORK?.trim() ?? requireVarString(vars, "NETWORK")
-    );
-    const network = NETWORKS[networkName];
-
-    const sessionRaw = vars.__siweSession ?? scenarioVars.__siweSession;
-    if (!sessionRaw || typeof sessionRaw !== "object") {
-      throw new Error("Missing __siweSession (did you run initSiwe?)");
-    }
-
-    const session = sessionRaw as Readonly<Pick<Session, "token" | "user">>;
-    const config = buildMspHttpClientConfig(network);
-    const client = await MspClient.connect(config, async () => session as Session);
-
     const logger = getLogger();
+    const env = readEnv();
+    const network = NETWORKS[env.network];
+
+    const session = getPersistedVar(context, "__siweSession") as Session;
+    const config = buildMspHttpClientConfig(network);
+    const client = await MspClient.connect(config, async () => session);
+
     const profile = await client.auth.getProfile();
     logger.debug(
       {

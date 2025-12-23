@@ -93,3 +93,19 @@ export function readVarBool(
   }
   return undefined;
 }
+
+/**
+ * Read a "persisted" var from Artillery context.
+ *
+ * Artillery may merge `context.scenario.vars` back into `context.vars` between steps/iterations.
+ * This helper checks both places (prefer `context.vars`) to avoid boilerplate in processors.
+ */
+export function getPersistedVar(
+  context: ArtilleryContext,
+  key: string
+): unknown {
+  const vars = ensureVars(context);
+  if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
+  const svars = ensureScenarioVars(context);
+  return svars[key];
+}
