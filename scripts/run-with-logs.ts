@@ -8,20 +8,6 @@ type AllocatorConfig = Readonly<{
   startIndex: number;
 }>;
 
-function shouldStartAllocator(cmd: string, args: string[]): boolean {
-  // If user explicitly provided a URL, don't start our own server.
-  if (process.env.INDEX_ALLOCATOR_URL?.trim()) return false;
-
-  // Explicit opt-in:
-  const enabledRaw = process.env.INDEX_ALLOCATOR_ENABLED?.trim().toLowerCase();
-  if (enabledRaw === "true" || enabledRaw === "1" || enabledRaw === "yes") {
-    return true;
-  }
-
-  // Default: enable for the getProfile init test (no extra env required).
-  return args.some((a) => a.endsWith("scenarios/siwe.init.getProfile.yml"));
-}
-
 function parseStartIndex(raw: string | undefined): number {
   if (!raw) return 0;
   const n = Number.parseInt(raw, 10);
@@ -41,30 +27,31 @@ async function startIndexAllocator(
   cfg: AllocatorConfig
 ): Promise<Readonly<{ url: string; close: () => Promise<void> }>> {
   let counter = cfg.startIndex;
+  const server = http.createServer(
+    (req: IncomingMessage, res: ServerResponse) => {
+      try {
+        const url = req.url ?? "/";
+        if (req.method === "GET" && url.startsWith("/health")) {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
 
-  const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
-    try {
-      const url = req.url ?? "/";
-      if (req.method === "GET" && url.startsWith("/health")) {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
-        return;
+        if (req.method === "GET" && url.startsWith("/next")) {
+          const idx = counter++;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ index: idx }));
+          return;
+        }
+
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "not_found" }));
+      } catch (_e) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "internal_error" }));
       }
-
-      if (req.method === "GET" && url.startsWith("/next")) {
-        const idx = counter++;
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ index: idx }));
-        return;
-      }
-
-      res.writeHead(404, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "not_found" }));
-    } catch (e) {
-      res.writeHead(500, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "internal_error" }));
     }
-  });
+  );
 
   // Bind to loopback only; ephemeral port.
   await new Promise<void>((resolve, reject) => {
@@ -99,8 +86,8 @@ function usageAndExit(): never {
       "  - Else RUN_ID is generated and LOG_FILE becomes ./logs/run-<RUN_ID>.jsonl",
       "",
       "Examples:",
-      '  pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/siwe.init.getProfile.yml',
-      '  LOG_FILE=./logs/my-run.jsonl pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/siwe.init.getProfile.yml',
+      "  pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/examples.getProfile.yml",
+      "  LOG_FILE=./logs/my-run.jsonl pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/examples.getProfile.yml",
     ].join("\n")
   );
   process.exit(2);
@@ -127,8 +114,9 @@ function ensureLogFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   }
 
   const runIdRaw =
-    (env.RUN_ID && env.RUN_ID.trim().length > 0 ? env.RUN_ID.trim() : undefined) ??
-    `${nowStamp()}-${randomSuffix()}`;
+    (env.RUN_ID && env.RUN_ID.trim().length > 0
+      ? env.RUN_ID.trim()
+      : undefined) ?? `${nowStamp()}-${randomSuffix()}`;
   const runId = sanitizeRunId(runIdRaw);
 
   const dir = join(process.cwd(), "logs");
@@ -150,26 +138,22 @@ if (!cmd) usageAndExit();
 const args = process.argv.slice(sepIdx + 2);
 const withLogs = ensureLogFileEnv(process.env);
 
-let allocator:
-  | Readonly<{ url: string; close: () => Promise<void> }>
-  | undefined;
-if (shouldStartAllocator(cmd, args)) {
-  allocator = await startIndexAllocator({
-    startIndex: parseStartIndex(process.env.INDEX_ALLOCATOR_START),
-  });
-}
+// Primary source of unique account indices:
+// Always start the local allocator for every run and always inject its URL
+// into the child process (ignore any pre-existing INDEX_ALLOCATOR_URL).
+const allocator = await startIndexAllocator({
+  startIndex: parseStartIndex(process.env.INDEX_ALLOCATOR_START),
+});
 
 const childEnv: NodeJS.ProcessEnv = {
   ...withLogs,
-  ...(allocator ? { INDEX_ALLOCATOR_URL: allocator.url } : {}),
+  INDEX_ALLOCATOR_URL: allocator.url,
 };
 
 // eslint-disable-next-line no-console
 console.log(`[run-with-logs] LOG_FILE=${childEnv.LOG_FILE}`);
-if (allocator) {
-  // eslint-disable-next-line no-console
-  console.log(`[run-with-logs] INDEX_ALLOCATOR_URL=${allocator.url}`);
-}
+// eslint-disable-next-line no-console
+console.log(`[run-with-logs] INDEX_ALLOCATOR_URL=${allocator.url}`);
 
 const child = spawn(cmd, args, {
   stdio: "inherit",
@@ -178,17 +162,17 @@ const child = spawn(cmd, args, {
 });
 
 child.on("exit", (code, signal) => {
-  (async () => {
-    await allocator?.close();
-  })()
-    .then(() => {
-      if (signal) {
-        process.kill(process.pid, signal);
-        return;
-      }
-      process.exit(code ?? 1);
-    })
-    .catch(() => process.exit(code ?? 1));
+  void (async () => {
+    try {
+      await allocator.close();
+    } catch {
+      // best-effort cleanup
+    }
+
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+    process.exit(code ?? 1);
+  })();
 });
-
-
