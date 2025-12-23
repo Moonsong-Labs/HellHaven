@@ -17,7 +17,7 @@
     "test:siwe:sequential": "pnpm build && pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/siwe.sequential.yml",
     "test:siwe:random": "pnpm build && pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/siwe.random.yml",
     "test:siwe:auth:sequential": "pnpm build && pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/siwe.auth.sequential.yml",
-    "test:siwe:init:getProfile": "pnpm build && pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/siwe.init.getProfile.yml",
+    "test:examples:getProfile": "pnpm build && pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/examples.getProfile.yml",
     "test:download": "pnpm build && pnpm exec tsx scripts/run-with-logs.ts -- pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.download.yml"
   },
   "dependencies": {

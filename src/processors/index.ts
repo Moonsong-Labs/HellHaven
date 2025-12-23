@@ -18,6 +18,4 @@ export * from "./metrics.js";
 export * from "./msp-unauth.js";
 export * from "./siwe-auth.js";
 export * from "./siwe-bootstrap.js";
-export * from "./siwe-init.js";
-
-
+export * from "./examples.js";

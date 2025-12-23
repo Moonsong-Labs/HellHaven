@@ -1,5 +1,10 @@
 config:
-  # Base URL used by the built-in HTTP engine (not used in this test)
+  # Template scenario: init steps + action step (metrics-focused)
+  #
+  # Notes:
+  # - Provide `NETWORK` and `TEST_MNEMONIC` via env vars.
+  # - Use `muteMetrics`/`unmuteMetrics` to keep init step metrics out of the summary
+  #   while still surfacing error counters (e.g. `*.err`).
   target: "http://localhost"
   processor: "../dist/src/processors/index.js"
   variables:
@@ -11,16 +16,19 @@ config:
     ACCOUNT_INDEX: 0
   phases:
     - name: init-and-actions
-      duration: 10
+      duration: 60
       arrivalRate: 5
 scenarios:
-  - name: siwe init (derive account + SIWE) then getProfile
+  - name: getProfile
     flow:
+      # Init (muted): derive + SIWE without polluting summary metrics
+      - function: muteMetrics
       - function: deriveAccount
       - function: SIWE
-      # Let's retrieve the user's profile 2 times (using the same VU)
+      - function: unmuteMetrics
+      # Actions: focus metrics here
       - loop:
           - function: actionGetProfile
-        count: 2
+        count: 100
 
 
