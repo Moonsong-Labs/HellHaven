@@ -12,7 +12,6 @@
 export * from "./account-derive.js";
 export * from "./authentication.js";
 export * from "./download.js";
-export * from "./log-smoke.js";
 export * from "./metrics.js";
 export * from "./msp-unauth.js";
 export * from "./siwe-bootstrap.js";
