@@ -1,9 +1,20 @@
-import { cacheAccountIndex, selectAccountIndex } from "../helpers/accountIndex.js";
+import {
+  cacheAccountIndex,
+  selectAccountIndex,
+} from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
-import { ensureVars, type ArtilleryContext, type ArtilleryEvents, type Done } from "../helpers/artillery.js";
-import { readRequiredEnv } from "../helpers/env.js";
+import {
+  ensureScenarioVars,
+  ensureVars,
+  requireVarString,
+  persistVars,
+  type ArtilleryContext,
+  type ArtilleryEvents,
+  type Done,
+} from "../helpers/artillery.js";
 import { toError } from "../helpers/errors.js";
 import { getLogger } from "../log.js";
+import { createEmitter } from "../helpers/metrics.js";
 
 /**
  * Fetch the next unique account index from the local index allocator service.
@@ -21,7 +32,9 @@ import { getLogger } from "../log.js";
 async function fetchNextIndex(): Promise<number> {
   const baseUrl = process.env.INDEX_ALLOCATOR_URL?.trim();
   if (!baseUrl) {
-    throw new Error("Missing INDEX_ALLOCATOR_URL (index allocator not running)");
+    throw new Error(
+      "Missing INDEX_ALLOCATOR_URL (index allocator not running)"
+    );
   }
 
   const timeoutMsRaw = process.env.INDEX_ALLOCATOR_TIMEOUT_MS?.trim();
@@ -65,10 +78,14 @@ export async function deriveAccount(
 ): Promise<void> {
   const start = Date.now();
   try {
+    const m = createEmitter(context, events);
     const logger = getLogger();
     const vars = ensureVars(context);
+    const scenarioVars = ensureScenarioVars(context);
 
-    const mnemonic = readRequiredEnv("TEST_MNEMONIC");
+    const mnemonic =
+      process.env.TEST_MNEMONIC?.trim() ??
+      requireVarString(vars, "TEST_MNEMONIC");
 
     // Cache: keep index stable for the duration of the VU.
     let selection = selectAccountIndex(vars);
@@ -78,19 +95,22 @@ export async function deriveAccount(
       if (!Number.isInteger(vars.__accountIndex)) {
         const idx = await fetchNextIndex();
         selection = { mode: "byIndex", index: idx, source: "allocator:/next" };
-        vars.accountIndex = idx;
+        persistVars(context, { accountIndex: idx });
       }
     }
     cacheAccountIndex(vars, selection);
+    cacheAccountIndex(scenarioVars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
     if (!derived.privateKey) {
       throw new Error("Derived account has no privateKey available");
     }
 
-    vars.privateKey = derived.privateKey;
-    vars.__accountAddress = derived.account.address;
-    vars.__derivationPath = derived.derivation.path;
+    persistVars(context, {
+      privateKey: derived.privateKey,
+      __accountAddress: derived.account.address,
+      __derivationPath: derived.derivation.path,
+    });
 
     logger.debug(
       {
@@ -102,13 +122,18 @@ export async function deriveAccount(
       "Derived account"
     );
 
-    events.emit("counter", "init.derive.ok", 1);
-    events.emit("histogram", "init.derive.ms", Date.now() - start);
+    m.counter("init.derive.ok", 1);
+    m.histogram("init.derive.ms", Date.now() - start);
     done?.();
   } catch (err) {
-    events.emit("counter", "init.derive.err", 1);
+    try {
+      const logger = getLogger();
+      logger.error({ err }, "deriveAccount failed");
+    } catch {
+      // ignore logger failures
+    }
+    const m = createEmitter(context, events);
+    m.counter("init.derive.err", 1);
     done?.(toError(err));
   }
 }
-
-
