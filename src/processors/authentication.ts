@@ -1,5 +1,5 @@
 import { MspClient, type Session } from "@storagehub-sdk/msp-client";
-import { readEnv } from "../config.js";
+import { parseNetworkName } from "../config.js";
 import { getLogger } from "../log.js";
 import { NETWORKS } from "../networks.js";
 import { toError } from "../helpers/errors.js";
@@ -9,12 +9,14 @@ import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   ensureVars,
+  persistVars,
   requireVarString,
   type ArtilleryContext,
   type ArtilleryEvents,
   type Done,
 } from "../helpers/artillery.js";
 import { ensure0xPrefix } from "../helpers/validation.js";
+import { createEmitter } from "../helpers/metrics.js";
 
 /**
  * Authentication step: SIWE
@@ -32,10 +34,13 @@ export async function SIWE(
 ): Promise<void> {
   const start = Date.now();
   try {
+    const m = createEmitter(context, events);
     const logger = getLogger();
-    const env = readEnv();
-    const network = NETWORKS[env.network];
     const vars = ensureVars(context);
+    const networkName = parseNetworkName(
+      process.env.NETWORK?.trim() ?? requireVarString(vars, "NETWORK")
+    );
+    const network = NETWORKS[networkName];
 
     const pkRaw = requireVarString(vars, "privateKey");
     const pk = ensure0xPrefix(pkRaw, 32).toLowerCase() as `0x${string}`;
@@ -58,16 +63,25 @@ export async function SIWE(
       token: session.token,
       user: session.user,
     };
-    vars.__siweToken = session.token;
-    vars.__siweSession = sessionLite;
+    persistVars(context, {
+      __siweToken: session.token,
+      __siweSession: sessionLite,
+    });
 
     logger.debug({ address: session.user.address }, "SIWE authenticated");
 
-    events.emit("counter", "auth.siwe.ok", 1);
-    events.emit("histogram", "auth.siwe.ms", Date.now() - start);
+    m.counter("auth.siwe.ok", 1);
+    m.histogram("auth.siwe.ms", Date.now() - start);
     done?.();
   } catch (err) {
-    events.emit("counter", "auth.siwe.err", 1);
+    try {
+      const logger = getLogger();
+      logger.error({ err }, "SIWE failed");
+    } catch {
+      // ignore logger failures
+    }
+    const m = createEmitter(context, events);
+    m.counter("auth.siwe.err", 1);
     done?.(toError(err));
   }
 }
@@ -87,16 +101,16 @@ export async function SIWX(
   done?: Done
 ): Promise<void> {
   try {
+    const m = createEmitter(context, events);
     const vars = ensureVars(context);
     const now = Date.now();
     // Dummy token, not used for real auth.
     vars.__siwxToken = `siwx_dummy_${now}`;
-    events.emit("counter", "auth.siwx.ok", 1);
+    m.counter("auth.siwx.ok", 1);
     done?.();
   } catch (err) {
-    events.emit("counter", "auth.siwx.err", 1);
+    const m = createEmitter(context, events);
+    m.counter("auth.siwx.err", 1);
     done?.(toError(err));
   }
 }
-
-
