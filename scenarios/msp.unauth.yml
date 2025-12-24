@@ -32,8 +32,9 @@ config:
       rampTo: 1
 
 scenarios:
-  - name: msp_unauth_load
+  - name: MSP_Unauthenticated_calls
     flow:
-      - function: mspUnauthLoad
+      - function: getHealth
+      - function: getInfo
 
 
