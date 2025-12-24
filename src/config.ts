@@ -4,13 +4,7 @@ export type Env = Readonly<{
 
 export type NetworkName = Env["network"];
 
-function getRequiredEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required env var: ${key}`);
-  }
-  return value;
-}
+import { readRequiredEnv } from "./helpers/env.js";
 
 export function parseNetworkName(raw: string): NetworkName {
   const v = raw.trim();
@@ -23,6 +17,6 @@ export function parseNetworkName(raw: string): NetworkName {
 }
 
 export function readEnv(): Env {
-  const network = parseNetworkName(getRequiredEnv("NETWORK"));
+  const network = parseNetworkName(readRequiredEnv("NETWORK"));
   return { network };
 }
