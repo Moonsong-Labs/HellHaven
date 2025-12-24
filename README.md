@@ -4,7 +4,7 @@ This repo is an Artillery-based load testing suite to measure limits and identif
 
 ## Requirements
 
-- **Node.js >= 22** (SDK `@storagehub-sdk/core@0.3.4` declares this)
+- **Node.js >= 22**
 - `pnpm`
 
 ## Install
@@ -18,12 +18,13 @@ pnpm install
 Required:
 - `NETWORK` (`testnet`, `stagenet` or `local`)
 
-Optional:
-- none (health checks are unauthenticated)
+Per-test required:
+- `TEST_MNEMONIC` (required by tests that derive accounts and do SIWE)
+- `FILE_KEY` (required by the download test)
 
 ## Network configuration
 
-Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts` and are copied from `datahaven-monitor`:
+Network URLs/IDs are intentionally **hardcoded** in `src/networks.ts`:
 - **Testnet**: MSP `https://deo-dh-backend.testnet.datahaven-infra.network`
 - **Stagenet**: MSP `https://deo-dh-backend.stagenet.datahaven-infra.network`
 - **Local**: MSP `http://127.0.0.1:8080`, RPC `http://127.0.0.1:9888`
@@ -44,28 +45,39 @@ Local notes:
 - `pnpm fmt:fix` — apply formatting
 - `pnpm lint` — check lint rules
 - `pnpm lint:fix` — apply safe lint fixes
-- `pnpm test` — build -> artillery
-- `pnpm test:msp-unauth` — standalone unauth MSP load test (no SIWE, no keys)
-- `pnpm test:download` — file download load test (requires SIWE auth + FILE_KEY)
+- `pnpm test:run scenarios/<file>.yml` — run any scenario (build + logs wrapper)
 
-Examples (local):
+List available scenarios:
 
 ```bash
-NETWORK=local pnpm test:msp-unauth
+ls scenarios
+```
+
+Run one:
+
+```bash
+NETWORK=stagenet pnpm test:run scenarios/<file>.yml
+```
+
+Examples (replace the scenario file with anything from `ls scenarios`):
+
+```bash
+NETWORK=local pnpm test:run scenarios/artillery.msp-unauth.yml
 ```
 
 ```bash
-NETWORK=local STORAGEHUB_PRIVATE_KEY=0x... pnpm test
-```
-
-Examples (local):
-
-```bash
-NETWORK=local pnpm test:msp-unauth
+LOG_LEVEL=info LOG_CONSOLE=true \
+NETWORK=stagenet \
+TEST_MNEMONIC="test test test test test test test test test test test junk" \
+pnpm test:run scenarios/examples.getProfile.yml
 ```
 
 ```bash
-LOG_LEVEL=info LOG_CONSOLE=true TEST_MNEMONIC="test test test test test test test test test test test junk" NETWORK=local pnpm test
+LOG_LEVEL=info LOG_CONSOLE=true \
+NETWORK=stagenet \
+TEST_MNEMONIC="test test test test test test test test test test test junk" \
+FILE_KEY="<your-file-key>" \
+pnpm test:run scenarios/download.yml
 ```
 
 ## Logging
@@ -81,11 +93,11 @@ Env vars:
 Examples:
 
 ```bash
-LOG_LEVEL=debug NETWORK=testnet pnpm test
+LOG_LEVEL=debug NETWORK=testnet pnpm test:run scenarios/artillery.msp-unauth.yml
 ```
 
 ```bash
-LOG_LEVEL=info LOG_FILE=./artillery.log NETWORK=testnet pnpm test
+LOG_LEVEL=info LOG_FILE=./artillery.log NETWORK=testnet pnpm test:run scenarios/artillery.msp-unauth.yml
 ```
 
 ## Standalone MSP unauth load test
@@ -99,11 +111,10 @@ It uses `NETWORK=testnet|stagenet` and the MSP base URL from `src/networks.ts`.
 Run:
 
 ```bash
-NETWORK=stagenet pnpm test:msp-unauth
+NETWORK=stagenet pnpm test:run scenarios/artillery.msp-unauth.yml
 ```
 
 Knobs (optional):
-- `ARTILLERY_WORKERS=4` (true parallel local processes; spawns N concurrent Artillery runs)
 - `VU_SLEEP_MIN_MS=50` / `VU_SLEEP_MAX_MS=250` (jitter per request loop)
 - `MSP_TIMEOUT_MS=60000` (override HTTP timeout)
 
@@ -114,55 +125,74 @@ Metrics emitted (counters + histograms):
 
 ## Download load test
 
-This test authenticates via SIWE and downloads a file from the MSP, measuring throughput and latency.
+This test performs init steps (derive + SIWE) and downloads a file from the MSP, measuring throughput and latency.
 
 Required env vars:
-- `NETWORK` (`testnet` or `stagenet`)
+- `NETWORK` (`testnet`, `stagenet` or `local`)
+- `TEST_MNEMONIC`
 - `FILE_KEY` (the file key/hash to download)
 
 Run:
 
 ```bash
-NETWORK=stagenet FILE_KEY=<your-file-key> pnpm test:download
+NETWORK=stagenet FILE_KEY=<your-file-key> pnpm test:run scenarios/download.yml
 ```
 
 Knobs (optional):
-- `ARTILLERY_WORKERS=4` (parallel local processes)
 - `LOG_LEVEL=info` (see Logging section)
 
 Metrics emitted:
-- `download.siwe.ok`, `download.siwe.ms` (SIWE auth)
 - `download.file.ok`, `download.file.ms` (file download)
 - `download.bytes` (total bytes downloaded per request)
-- `download.siwe.err`, `download.file.err` (error counters)
+- `download.file.err` (error counter)
+- `auth.siwe.err` (only if SIWE fails; init steps are muted so only errors surface)
 
-## Per-VU private keys (Artillery payload)
+## How initialization + mute metrics works
 
-This test expects a per-VU `privateKey` variable from `config.payload` in `scenarios/artillery.yml`.
+Most scenarios follow the same pattern:
+- **Init** (muted): `deriveAccount` → `SIWE`
+- **Actions** (not muted): call one or more action processors (e.g. `actionGetProfile`, `downloadFile`)
 
-1) Create `data/private_keys.csv` (ignored by git), based on the example:
-- `data/private_keys.example.csv`
+The muting is controlled by two processor steps:
+- `muteMetrics`: while muted, the metrics helper will **only emit `*.err` counters**; it drops ok counters + histograms.
+- `unmuteMetrics`: restores normal metric emission for the action phase.
 
-Notes:
-- `pnpm preflight` will use `STORAGEHUB_PRIVATE_KEY` **if set**, otherwise it will use the **first key** in `data/private_keys.csv`.
-- If Artillery does not inject `privateKey` into `context.vars` (depends on engine/runtime), the scenario will fall back to reading keys directly from `data/private_keys.csv` (round-robin).
+This keeps summaries focused on action timings while still surfacing setup/auth failures.
 
-2) Run:
+### What `deriveAccount` does
+- Picks a unique account index (via the local index allocator started by `scripts/run-with-logs.ts`)
+- Derives an account from `TEST_MNEMONIC`
+- Persists `privateKey` (and derivation metadata) into Artillery vars for later steps
+
+### What `SIWE` does
+- Reads the derived `privateKey`
+- Calls the SDK SIWE auth (`mspClient.auth.SIWE(...)`)
+- Persists the resulting `__siweSession` into Artillery vars
+
+## How to add a new test
+
+1) **Create a scenario file** under `scenarios/` (for example `scenarios/myTest.yml`).
+
+2) **Use the standard template**:
+- `config.processor: "../dist/src/processors/index.js"`
+- Init steps (muted): `muteMetrics` → `deriveAccount` → `SIWE` → `unmuteMetrics`
+- Then call your action processor(s)
+
+3) Run it via the generic runner:
 
 ```bash
-NETWORK=stagenet LOG_LEVEL=info pnpm test
+NETWORK=stagenet pnpm test:run scenarios/myTest.yml
 ```
 
-## Scenario output
+(Optional) If you want a shortcut alias, add `test:myTest`: `"pnpm test:run scenarios/myTest.yml"`.
 
-Counters:
-- `sdk.storagehub.connect.ok`
-- `sdk.msp.connect.ok`
-- `sdk.disconnect.ok`
-- `sdk.connect.error`
+## Metrics (quick orientation)
 
-Timings:
-- `sdk.storagehub.connect.ms`
-- `sdk.msp.connect.ms`
+Metrics depend on the scenario and processor functions used. Common ones:
+- `msp.health.ok`, `msp.health.ms`, `msp.info.ok`, `msp.info.ms`, `msp.req.err`
+- `action.getProfile.ok`, `action.getProfile.ms`, `action.getProfile.err`
+- `download.file.ok`, `download.file.ms`, `download.bytes`, `download.file.err`
+
+When init steps are wrapped with `muteMetrics`/`unmuteMetrics`, only `*.err` counters from init will appear in the summary (ok + histograms are muted).
 
 

@@ -1,64 +1,36 @@
 import { Readable } from "node:stream";
 import { readEnv } from "../config.js";
 import { getLogger } from "../log.js";
-import { authenticateWithSiwe, connectMsp } from "../sdk/msp.js";
-import { initWalletFromPrivateKey, to0xPrivateKey } from "../sdk/wallet.js";
+import { MspClient, type Session } from "@storagehub-sdk/msp-client";
 import { NETWORKS } from "../networks.js";
-import { nextPrivateKey } from "../privateKeys.js";
-
-type ArtilleryEvents = Readonly<{
-  emit: (type: string, name: string, value: number) => void;
-}>;
-
-type ArtilleryContext = Readonly<{
-  vars?: Record<string, unknown>;
-}>;
-
-function getFileKey(): string {
-  const key = process.env.FILE_KEY;
-  if (!key) {
-    throw new Error("FILE_KEY env var is required");
-  }
-  return key;
-}
+import { toError } from "../helpers/errors.js";
+import { readRequiredEnv } from "../helpers/env.js";
+import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
+import { createEmitter } from "../helpers/metrics.js";
+import {
+  getPersistedVar,
+  type ArtilleryContext,
+  type ArtilleryEvents,
+} from "../helpers/artillery.js";
 
 export async function downloadFile(
   context: ArtilleryContext,
   events: ArtilleryEvents
 ): Promise<void> {
+  const m = createEmitter(context, events);
   const logger = getLogger();
   const env = readEnv();
   const network = NETWORKS[env.network];
-  const fileKey = getFileKey();
+  const fileKey = readRequiredEnv("FILE_KEY");
 
-  // Get private key (from Artillery vars or fallback)
-  const privateKeyRaw =
-    typeof context.vars?.privateKey === "string" &&
-    context.vars.privateKey.length > 0
-      ? context.vars.privateKey
-      : nextPrivateKey().privateKey;
-
-  const privateKey = to0xPrivateKey(privateKeyRaw);
-  const { walletClient } = initWalletFromPrivateKey(network, privateKey);
-
-  // Connect and authenticate
-  const conn = await connectMsp(env, logger);
-
-  const siweStart = Date.now();
-  try {
-    await authenticateWithSiwe(conn, env, walletClient, logger);
-    events.emit("counter", "download.siwe.ok", 1);
-    events.emit("histogram", "download.siwe.ms", Date.now() - siweStart);
-  } catch (err) {
-    events.emit("counter", "download.siwe.err", 1);
-    logger.error({ err }, "siwe failed");
-    throw err;
-  }
+  const session = getPersistedVar(context, "__siweSession") as Session;
+  const config = buildMspHttpClientConfig(network);
+  const client = await MspClient.connect(config, async () => session);
 
   // Download file
   const dlStart = Date.now();
   try {
-    const file = await conn.client.files.downloadFile(fileKey);
+    const file = await client.files.downloadFile(fileKey);
     if (!file?.stream) {
       throw new Error("downloadFile returned no stream");
     }
@@ -73,13 +45,14 @@ export async function downloadFile(
       totalBytes += (chunk as Buffer).length;
     }
 
-    events.emit("counter", "download.file.ok", 1);
-    events.emit("histogram", "download.file.ms", Date.now() - dlStart);
-    events.emit("histogram", "download.bytes", totalBytes);
+    m.counter("download.file.ok", 1);
+    m.histogram("download.file.ms", Date.now() - dlStart);
+    m.histogram("download.bytes", totalBytes);
     logger.info({ fileKey, totalBytes }, "download complete");
   } catch (err) {
-    events.emit("counter", "download.file.err", 1);
-    logger.error({ err, fileKey }, "download failed");
-    throw err;
+    m.counter("download.file.err", 1);
+    const error = toError(err);
+    logger.error({ err: error, fileKey }, "download failed");
+    throw error;
   }
 }

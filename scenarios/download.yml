@@ -1,6 +1,11 @@
 config:
   target: "http://localhost"
-  processor: "../dist/src/processors/download.js"
+  processor: "../dist/src/processors/index.js"
+  variables:
+    # Account index selection (mnemonic-based):
+    ACCOUNT_MODE: sequential
+    ACCOUNT_INDEX_START: 0
+    ACCOUNT_INDEX_COUNT: 1000
 
   phases:
     - name: warmup
@@ -24,5 +29,11 @@ config:
 scenarios:
   - name: download_file
     flow:
+      # Init (muted): derive + SIWE without polluting summary metrics
+      - function: muteMetrics
+      - function: deriveAccount
+      - function: SIWE
+      - function: unmuteMetrics
+      # Action
       - function: downloadFile
 
