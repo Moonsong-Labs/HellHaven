@@ -31,18 +31,23 @@ function usage(): never {
     [
       "Usage:",
       "  # Print recipients (no transfers):",
-      "  pnpm util:fund-accounts -- --mnemonic \"...\" [--count 10] [--start 0] [--json|--tsv]",
+      '  pnpm util:fund-accounts -- --mnemonic "..." [--count 10] [--start 0] [--json|--tsv]',
       "",
       "  # Fund recipients (native token transfers):",
-      "  NETWORK=local TEST_MNEMONIC=\"...\" pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 [--count 10] [--start 0] --yes",
-      "  NETWORK=local TEST_MNEMONIC=\"...\" pnpm util:fund-accounts -- --privateKey 0x... --amountWei 10000000000000000 [--count 10] [--start 0] --yes",
+      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 [--count 10] [--start 0] [--batchSize 10] --yes',
+      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amountWei 10000000000000000 [--count 10] [--start 0] [--batchSize 20] --yes',
       "",
       "Alternatively set env var TEST_MNEMONIC and omit --mnemonic.",
       "",
+      "Options:",
+      "  --batchSize N    Process N transactions in parallel per batch (default: 10)",
+      "                   Higher values = faster but may hit RPC rate limits",
+      "",
       "Examples:",
-      "  TEST_MNEMONIC=\"...\" pnpm util:fund-accounts -- --count 10",
-      "  pnpm util:fund-accounts -- --mnemonic \"...\" --start 0 --count 10 --json",
-      "  NETWORK=local TEST_MNEMONIC=\"...\" pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --count 10 --yes",
+      '  TEST_MNEMONIC="..." pnpm util:fund-accounts -- --count 10',
+      '  pnpm util:fund-accounts -- --mnemonic "..." --start 0 --count 10 --json',
+      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --count 10 --yes',
+      '  NETWORK=stagenet TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.1 --count 100 --batchSize 20 --yes',
     ].join("\n")
   );
   process.exit(1);
@@ -64,22 +69,22 @@ function printTable(rows: AccountRow[], start: number, count: number): void {
   // Header
   console.log(
     `${"index".padStart(indexWidth)}  ` +
-    `${"derivationPath".padEnd(pathWidth)}  ` +
-    "address"
+      `${"derivationPath".padEnd(pathWidth)}  ` +
+      "address"
   );
   // Separator
   console.log(
     `${"".padStart(indexWidth, "-")}  ` +
-    `${"".padEnd(pathWidth, "-")}  ` +
-    "------------------------------------------"
+      `${"".padEnd(pathWidth, "-")}  ` +
+      "------------------------------------------"
   );
 
   // Rows
   for (const r of rows) {
     console.log(
       `${String(r.index).padStart(indexWidth)}  ` +
-      `${r.path.padEnd(pathWidth)}  ` +
-      r.address
+        `${r.path.padEnd(pathWidth)}  ` +
+        r.address
     );
   }
 }
@@ -90,21 +95,77 @@ async function transferToAccount(
   account: ReturnType<typeof privateKeyToAccount>,
   to: Address,
   value: bigint,
-  index: number
+  index: number,
+  nonce?: number
 ): Promise<void> {
   const hash = await walletClient.sendTransaction({
     account,
     chain: null,
     to,
     value,
+    nonce,
   });
-  console.log(`tx sent index=${index} to=${to} hash=${hash}`);
+  console.log(`tx sent index=${index} to=${to} nonce=${nonce} hash=${hash}`);
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  console.log(`tx mined index=${index} status=${receipt.status} block=${receipt.blockNumber}`);
+  console.log(
+    `tx mined index=${index} status=${receipt.status} block=${receipt.blockNumber}`
+  );
 
   if (receipt.status !== "success") {
     throw new Error(`Transfer failed (index=${index}, to=${to}, hash=${hash})`);
+  }
+}
+
+/**
+ * Process transfers in batches with explicit nonce management.
+ * This allows parallel submission without nonce conflicts.
+ */
+async function transferBatch(
+  walletClient: WalletClient,
+  publicClient: PublicClient,
+  account: ReturnType<typeof privateKeyToAccount>,
+  recipients: Array<{ to: Address; value: bigint; index: number }>,
+  batchSize: number
+): Promise<void> {
+  // Get current nonce from chain
+  const startNonce = await publicClient.getTransactionCount({
+    address: account.address,
+    blockTag: "pending",
+  });
+
+  console.log(
+    `Starting batch from nonce=${startNonce}, total transfers=${recipients.length}`
+  );
+
+  // Process in batches to avoid overwhelming the RPC
+  for (let i = 0; i < recipients.length; i += batchSize) {
+    const batch = recipients.slice(i, i + batchSize);
+    const batchNum = Math.floor(i / batchSize) + 1;
+    const totalBatches = Math.ceil(recipients.length / batchSize);
+
+    console.log(
+      `\nProcessing batch ${batchNum}/${totalBatches} (${batch.length} txs)...`
+    );
+
+    // Submit all transactions in this batch in parallel with explicit nonces
+    const promises = batch.map((recipient, batchIdx) => {
+      const nonce = startNonce + i + batchIdx;
+      return transferToAccount(
+        walletClient,
+        publicClient,
+        account,
+        recipient.to,
+        recipient.value,
+        recipient.index,
+        nonce
+      );
+    });
+
+    // Wait for all transactions in this batch to complete
+    await Promise.all(promises);
+
+    console.log(`✓ Batch ${batchNum}/${totalBatches} completed`);
   }
 }
 
@@ -118,10 +179,13 @@ const asTsv = process.argv.includes("--tsv");
 const dryRun = process.argv.includes("--dry-run");
 const yes = process.argv.includes("--yes");
 
-const privateKeyRaw = readArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
+const privateKeyRaw =
+  readArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
 // `--amount` is a native-token decimal amount (MOCK/STAGE/SH/etc depending on network).
 const amountRaw = readArg("amount");
 const amountWeiRaw = readArg("amountWei");
+// Batch size for parallel processing (default: 10 transactions per batch)
+const batchSize = readIntArg("batchSize", 10);
 
 const wantsFunding = Boolean(privateKeyRaw || amountRaw || amountWeiRaw);
 
@@ -153,7 +217,9 @@ if (!wantsFunding) {
     throw new Error("Provide exactly one of: --amount or --amountWei");
   }
   if (!yes && !dryRun) {
-    throw new Error("Refusing to send transactions without --yes (or use --dry-run)");
+    throw new Error(
+      "Refusing to send transactions without --yes (or use --dry-run)"
+    );
   }
 
   const networkName = parseNetworkName(
@@ -165,22 +231,45 @@ if (!wantsFunding) {
   const pk = ensure0xPrefix(privateKeyRaw, 32).toLowerCase() as Hex;
   const account = privateKeyToAccount(pk);
   const walletClient = createViemWallet(network, account);
-  const publicClient = createPublicClient({ chain, transport: http(transportUrl) });
+  const publicClient = createPublicClient({
+    chain,
+    transport: http(transportUrl),
+  });
 
-  const value: bigint = amountRaw ? parseEther(amountRaw) : BigInt(amountWeiRaw!);
+  const value: bigint = amountRaw
+    ? parseEther(amountRaw)
+    : BigInt(amountWeiRaw!);
 
   console.log(
     `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${value} wei` +
-    (dryRun ? " (dry-run)" : "")
+      (dryRun ? " (dry-run)" : "") +
+      ` (batchSize=${batchSize})`
   );
 
-  for (const r of rows) {
-    const to = r.address as Address;
-    if (dryRun) {
+  if (dryRun) {
+    for (const r of rows) {
+      const to = r.address as Address;
       console.log(`[dry-run] -> ${to} value=${value} wei (index=${r.index})`);
-      continue;
     }
+  } else {
+    const recipients = rows.map((r) => ({
+      to: r.address as Address,
+      value,
+      index: r.index,
+    }));
 
-    await transferToAccount(walletClient, publicClient, account, to, value, r.index);
+    const startTime = Date.now();
+    await transferBatch(
+      walletClient,
+      publicClient,
+      account,
+      recipients,
+      batchSize
+    );
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    console.log(
+      `\n✅ All ${recipients.length} transfers completed in ${elapsed}s`
+    );
   }
 }
