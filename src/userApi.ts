@@ -14,9 +14,9 @@ import type { NetworkConfig } from "./networks.js";
  * - `network.chain.substrateWsUrl` must be reachable
  * - You must have `@polkadot/api` installed
  */
-export async function createUserApi(network: NetworkConfig): Promise<ApiPromise> {
+export async function createUserApi(
+  network: NetworkConfig
+): Promise<ApiPromise> {
   const provider = new WsProvider(network.chain.substrateWsUrl);
   return await ApiPromise.create({ provider });
 }
-
-

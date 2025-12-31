@@ -1,11 +1,8 @@
-import {
-  StorageHubClient,
-  filesystemAbi,
-} from "@storagehub-sdk/core";
+import { StorageHubClient, filesystemAbi } from "@storagehub-sdk/core";
 import { randomUUID } from "node:crypto";
 import { parseEventLogs } from "viem";
 import type { Hex, PublicClient } from "viem";
-import { sleep } from "./helpers/wait.js";
+import { sleep } from "./helpers/utils.js";
 import { ensure0xPrefix } from "./helpers/validation.js";
 import { getLogger } from "./log.js";
 import type {
@@ -50,7 +47,6 @@ export function makeBucketName(vuId: string | number, d = new Date()): string {
   return `artillery-${ts}-${String(vuId)}-${uuid}`;
 }
 
-
 /**
  * Verify that a BucketCreated event was emitted with the expected parameters.
  */
@@ -68,7 +64,9 @@ function verifyBucketCreatedEvent(
       { bucketId: expectedBucketId },
       "Receipt logs missing, cannot verify BucketCreated event"
     );
-    throw new Error("Receipt logs are missing; cannot verify BucketCreated event");
+    throw new Error(
+      "Receipt logs are missing; cannot verify BucketCreated event"
+    );
   }
 
   logger.debug(
@@ -231,7 +229,9 @@ export async function waitForBucketCreation(
       { bucketId: params.bucketId, txHash: params.txHash, status },
       "Bucket creation transaction failed"
     );
-    throw new Error(`Create bucket transaction failed (status=${String(status)})`);
+    throw new Error(
+      `Create bucket transaction failed (status=${String(status)})`
+    );
   }
 
   // 2) Verify BucketCreated event
@@ -246,7 +246,10 @@ export async function waitForBucketCreation(
 
   // 3) Optional: poll Substrate storage until bucket exists
   if (params.userApi) {
-    logger.debug({ bucketId: params.bucketId }, "Starting Substrate storage verification");
+    logger.debug(
+      { bucketId: params.bucketId },
+      "Starting Substrate storage verification"
+    );
     await pollSubstrateStorage(
       params.userApi,
       params.bucketId,
@@ -254,7 +257,10 @@ export async function waitForBucketCreation(
       params.delayMs ?? DEFAULT_BLOCK_TIME_MS
     );
   } else {
-    logger.debug({ bucketId: params.bucketId }, "Skipping Substrate storage verification (no userApi)");
+    logger.debug(
+      { bucketId: params.bucketId },
+      "Skipping Substrate storage verification (no userApi)"
+    );
   }
 
   const totalTime = Date.now() - startTime;
@@ -327,5 +333,3 @@ export async function createBucket(
     valuePropId: params.valuePropId,
   };
 }
-
-

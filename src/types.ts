@@ -61,4 +61,3 @@ export type WaitForBucketCreationParams = Readonly<{
 export type WaitForBucketCreationResult = Readonly<{
   receipt: unknown;
 }>;
-
