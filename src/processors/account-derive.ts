@@ -93,8 +93,32 @@ export async function deriveAccount(
       // When allocator is enabled, override the selection once per VU
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
-        const idx = await fetchNextIndex();
-        selection = { mode: "byIndex", index: idx, source: "allocator:/next" };
+        const allocatorIdx = await fetchNextIndex();
+
+        // Apply modulo to respect ACCOUNT_INDEX_COUNT (cycle through account range)
+        const startRaw = vars.ACCOUNT_INDEX_START;
+        const countRaw = vars.ACCOUNT_INDEX_COUNT;
+
+        const start =
+          typeof startRaw === "number"
+            ? startRaw
+            : typeof startRaw === "string"
+              ? Number(startRaw)
+              : 0;
+        const count =
+          typeof countRaw === "number"
+            ? countRaw
+            : typeof countRaw === "string"
+              ? Number(countRaw)
+              : 1000;
+
+        const idx = start + (allocatorIdx % count);
+
+        selection = {
+          mode: "byIndex",
+          index: idx,
+          source: `allocator:/next(raw=${allocatorIdx})`,
+        };
         persistVars(context, { accountIndex: idx });
       }
     }
@@ -112,7 +136,7 @@ export async function deriveAccount(
       __derivationPath: derived.derivation.path,
     });
 
-    logger.debug(
+    logger.info(
       {
         index: selection.index,
         path: derived.derivation.path,
