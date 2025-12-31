@@ -16,7 +16,6 @@ scenarios:
     flow:
       - function: muteMetrics
       - function: deriveAccount
-      - function: SIWE
       - function: unmuteMetrics
       - function: actionCreateBucket
 
