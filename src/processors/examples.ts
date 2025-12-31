@@ -102,7 +102,22 @@ export async function actionCreateBucket(
     const account = privateKeyToAccount(pk);
     const walletClient = createViemWallet(network, account);
     const { chain, transportUrl } = toViemChain(network);
-    const publicClient = createPublicClient({ chain, transport: http(transportUrl) });
+    const publicClient = createPublicClient({
+      chain,
+      transport: http(transportUrl),
+    });
+
+    // Check account balance
+    const balance = await publicClient.getBalance({ address: account.address });
+    const logger = getLogger();
+    logger.info(
+      {
+        address: account.address,
+        balance: balance.toString(),
+        balanceEth: (Number(balance) / 1e18).toFixed(6),
+      },
+      "Account creating bucket"
+    );
 
     const config = buildMspHttpClientConfig(network);
     const mspClient = await MspClient.connect(config, async () => session);
