@@ -230,12 +230,9 @@ if (!wantsFunding) {
     transport: http(transportUrl),
   });
 
-  if (!amountRaw && !amountWeiRaw) {
-    throw new Error("Either amountRaw or amountWeiRaw must be provided");
-  }
   const value: bigint = amountRaw
     ? parseEther(amountRaw)
-    : BigInt(amountWeiRaw);
+    : BigInt(amountWeiRaw as string);
 
   console.log(
     `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${value} wei${dryRun ? " (dry-run)" : ""} (batchSize=${batchSize})`

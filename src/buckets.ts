@@ -1,14 +1,14 @@
 import { type StorageHubClient, filesystemAbi } from "@storagehub-sdk/core";
-import type { ApiPromise } from "@polkadot/api";
 import { randomUUID } from "node:crypto";
 import { parseEventLogs } from "viem";
-import type { Hex, PublicClient } from "viem";
+import type { Hex, Log, PublicClient, RpcLog } from "viem";
 import { sleep } from "./helpers/utils.js";
 import { ensure0xPrefix } from "./helpers/validation.js";
 import { getLogger } from "./log.js";
 import type {
   BucketParams,
   CreateBucketResult,
+  PolkadotApi,
   WaitForBucketCreationParams,
   WaitForBucketCreationResult,
 } from "./types.js";
@@ -77,7 +77,7 @@ function verifyBucketCreatedEvent(
 
   const events = parseEventLogs({
     abi: filesystemAbi,
-    logs: logs as unknown[],
+    logs: logs as (Log | RpcLog)[],
     eventName: "BucketCreated",
   });
 
@@ -129,7 +129,7 @@ function verifyBucketCreatedEvent(
  * Poll Substrate storage until bucket exists.
  */
 async function pollSubstrateStorage(
-  userApi: ApiPromise,
+  userApi: PolkadotApi,
   bucketId: `0x${string}`,
   retries: number,
   delayMs: number
@@ -147,9 +147,7 @@ async function pollSubstrateStorage(
       "Polling Substrate storage for bucket"
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const bucketOpt = await userApi.query.providers.buckets(bucketId);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (bucketOpt?.isSome) {
       logger.info(
         { bucketId, attempt, totalAttempts: attempt + 1 },
@@ -290,7 +288,7 @@ export async function createBucket(
   publicClient: PublicClient,
   filesystemContractAddress: `0x${string}`,
   params: BucketParams,
-  userApi?: ApiPromise
+  userApi?: PolkadotApi
 ): Promise<CreateBucketResult> {
   // 1) Derive bucketId
   const bucketIdPromise = storageHubClient.deriveBucketId(

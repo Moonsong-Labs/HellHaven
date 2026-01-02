@@ -1,5 +1,18 @@
-import type { ApiPromise } from "@polkadot/api";
 import type { Hex, PublicClient } from "viem";
+
+/**
+ * Minimal interface for Polkadot ApiPromise - only what we need for bucket operations.
+ * This avoids importing the full @polkadot/api types which have complex generics.
+ */
+export interface PolkadotApi {
+  query: {
+    providers: {
+      buckets: (bucketId: `0x${string}`) => Promise<{
+        isSome: boolean;
+      }>;
+    };
+  };
+}
 
 /**
  * Parameters for bucket creation operations.
@@ -38,7 +51,7 @@ export type WaitForBucketCreationParams = Readonly<{
    * Optional: if provided, also poll Substrate storage until bucket exists.
    * If omitted, only EVM receipt + event check is performed.
    */
-  userApi?: ApiPromise;
+  userApi?: PolkadotApi | undefined;
   /**
    * Optional: wait until the tx is observed in the pool before waiting for receipt.
    * (Useful in deterministic test rigs that expose a txpool wait primitive.)
