@@ -1,4 +1,5 @@
-import { StorageHubClient, filesystemAbi } from "@storagehub-sdk/core";
+import { type StorageHubClient, filesystemAbi } from "@storagehub-sdk/core";
+import type { ApiPromise } from "@polkadot/api";
 import { randomUUID } from "node:crypto";
 import { parseEventLogs } from "viem";
 import type { Hex, PublicClient } from "viem";
@@ -76,7 +77,7 @@ function verifyBucketCreatedEvent(
 
   const events = parseEventLogs({
     abi: filesystemAbi,
-    logs: logs as any[],
+    logs: logs as unknown[],
     eventName: "BucketCreated",
   });
 
@@ -128,7 +129,7 @@ function verifyBucketCreatedEvent(
  * Poll Substrate storage until bucket exists.
  */
 async function pollSubstrateStorage(
-  userApi: any,
+  userApi: ApiPromise,
   bucketId: `0x${string}`,
   retries: number,
   delayMs: number
@@ -289,7 +290,7 @@ export async function createBucket(
   publicClient: PublicClient,
   filesystemContractAddress: `0x${string}`,
   params: BucketParams,
-  userApi?: any
+  userApi?: ApiPromise
 ): Promise<CreateBucketResult> {
   // 1) Derive bucketId
   const bucketIdPromise = storageHubClient.deriveBucketId(

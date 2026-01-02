@@ -68,23 +68,17 @@ function printTable(rows: AccountRow[], start: number, count: number): void {
 
   // Header
   console.log(
-    `${"index".padStart(indexWidth)}  ` +
-      `${"derivationPath".padEnd(pathWidth)}  ` +
-      "address"
+    `${"index".padStart(indexWidth)}  ${"derivationPath".padEnd(pathWidth)}  address`
   );
   // Separator
   console.log(
-    `${"".padStart(indexWidth, "-")}  ` +
-      `${"".padEnd(pathWidth, "-")}  ` +
-      "------------------------------------------"
+    `${"".padStart(indexWidth, "-")}  ${"".padEnd(pathWidth, "-")}  ------------------------------------------`
   );
 
   // Rows
   for (const r of rows) {
     console.log(
-      `${String(r.index).padStart(indexWidth)}  ` +
-        `${r.path.padEnd(pathWidth)}  ` +
-        r.address
+      `${String(r.index).padStart(indexWidth)}  ${r.path.padEnd(pathWidth)}  ${r.address}`
     );
   }
 }
@@ -236,14 +230,15 @@ if (!wantsFunding) {
     transport: http(transportUrl),
   });
 
+  if (!amountRaw && !amountWeiRaw) {
+    throw new Error("Either amountRaw or amountWeiRaw must be provided");
+  }
   const value: bigint = amountRaw
     ? parseEther(amountRaw)
-    : BigInt(amountWeiRaw!);
+    : BigInt(amountWeiRaw);
 
   console.log(
-    `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${value} wei` +
-      (dryRun ? " (dry-run)" : "") +
-      ` (batchSize=${batchSize})`
+    `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${value} wei${dryRun ? " (dry-run)" : ""} (batchSize=${batchSize})`
   );
 
   if (dryRun) {

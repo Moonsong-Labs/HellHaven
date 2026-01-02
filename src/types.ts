@@ -1,3 +1,4 @@
+import type { ApiPromise } from "@polkadot/api";
 import type { Hex, PublicClient } from "viem";
 
 /**
@@ -37,7 +38,7 @@ export type WaitForBucketCreationParams = Readonly<{
    * Optional: if provided, also poll Substrate storage until bucket exists.
    * If omitted, only EVM receipt + event check is performed.
    */
-  userApi?: any; // ApiPromise from @polkadot/api
+  userApi?: ApiPromise;
   /**
    * Optional: wait until the tx is observed in the pool before waiting for receipt.
    * (Useful in deterministic test rigs that expose a txpool wait primitive.)
