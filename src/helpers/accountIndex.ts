@@ -32,11 +32,17 @@ export type ParsedAccountIndexConfig =
   | Readonly<{ mode: "sequential"; start: number; count: number }>
   | Readonly<{ mode: "random"; start: number; count: number; seed?: number }>;
 
-export function parseAccountIndexConfig(rawVars: unknown): ParsedAccountIndexConfig {
+export function parseAccountIndexConfig(
+  rawVars: unknown
+): ParsedAccountIndexConfig {
   const vars = requireDict(rawVars, "context.vars");
 
   const modeRaw = requireNonEmptyString(vars.ACCOUNT_MODE, "ACCOUNT_MODE");
-  if (modeRaw !== "byIndex" && modeRaw !== "sequential" && modeRaw !== "random") {
+  if (
+    modeRaw !== "byIndex" &&
+    modeRaw !== "sequential" &&
+    modeRaw !== "random"
+  ) {
     throw new Error(
       `Missing or invalid ACCOUNT_MODE: ${modeRaw} (expected 'byIndex', 'sequential', or 'random')`
     );
@@ -47,7 +53,11 @@ export function parseAccountIndexConfig(rawVars: unknown): ParsedAccountIndexCon
     if (vars.accountIndex !== undefined) {
       const idx = requireInteger(vars.accountIndex, "accountIndex");
       if (idx < 0) throw new Error("accountIndex must be >= 0");
-      return { mode: "byIndex", accountIndex: idx, source: "payload:accountIndex" };
+      return {
+        mode: "byIndex",
+        accountIndex: idx,
+        source: "payload:accountIndex",
+      };
     }
 
     const idx = requireInteger(vars.ACCOUNT_INDEX, "ACCOUNT_INDEX");
@@ -70,7 +80,10 @@ export function parseAccountIndexConfig(rawVars: unknown): ParsedAccountIndexCon
 
   // random
   if (vars.ACCOUNT_RANDOM_SEED !== undefined) {
-    const seed = requireInteger(vars.ACCOUNT_RANDOM_SEED, "ACCOUNT_RANDOM_SEED");
+    const seed = requireInteger(
+      vars.ACCOUNT_RANDOM_SEED,
+      "ACCOUNT_RANDOM_SEED"
+    );
     return { mode: "random", start, count, seed };
   }
   return { mode: "random", start, count };

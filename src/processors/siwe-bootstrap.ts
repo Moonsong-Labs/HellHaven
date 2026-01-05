@@ -1,5 +1,6 @@
 import { getLogger } from "../log.js";
 import {
+  type AccountIndexSelection,
   cacheAccountIndex,
   selectAccountIndex,
 } from "../helpers/accountIndex.js";
