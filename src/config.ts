@@ -2,25 +2,21 @@ export type Env = Readonly<{
   network: "testnet" | "stagenet" | "local";
 }>;
 
-function getRequiredEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required env var: ${key}`);
+export type NetworkName = Env["network"];
+
+import { readRequiredEnv } from "./helpers/env.js";
+
+export function parseNetworkName(raw: string): NetworkName {
+  const v = raw.trim();
+  if (v === "testnet" || v === "stagenet" || v === "local") {
+    return v;
   }
-  return value;
+  throw new Error(
+    `Invalid NETWORK: ${raw} (expected 'testnet', 'stagenet' or 'local')`
+  );
 }
 
 export function readEnv(): Env {
-  const networkRaw = getRequiredEnv("NETWORK");
-  if (
-    networkRaw !== "testnet" &&
-    networkRaw !== "stagenet" &&
-    networkRaw !== "local"
-  ) {
-    throw new Error(
-      `Invalid NETWORK: ${networkRaw} (expected 'testnet', 'stagenet' or 'local')`
-    );
-  }
-  const network = networkRaw;
+  const network = parseNetworkName(readRequiredEnv("NETWORK"));
   return { network };
 }

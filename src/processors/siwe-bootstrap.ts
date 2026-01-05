@@ -46,26 +46,15 @@ export async function deriveAndPrint(
 
     const printPk = readBoolEnv("PRINT_DERIVED_PRIVATE_KEY");
     if (printPk) {
-      if (!derived.privateKey) {
-        logger.warn(
-          {
-            index: selection.index,
-            path: derived.derivation.path,
-            address: derived.account.address,
-          },
-          "derived account has no privateKey available to print"
-        );
-      } else {
-        logger.info(
-          {
-            index: selection.index,
-            path: derived.derivation.path,
-            address: derived.account.address,
-            privateKey: derived.privateKey,
-          },
-          "derived account (PRINT_DERIVED_PRIVATE_KEY enabled)"
-        );
-      }
+      logger.info(
+        {
+          index: selection.index,
+          path: derived.derivation.path,
+          address: derived.account.address,
+          privateKey: derived.privateKey,
+        },
+        "derived account (PRINT_DERIVED_PRIVATE_KEY enabled)"
+      );
     } else {
       logger.info(
         {
