@@ -19,7 +19,7 @@ import { createEmitter } from "../helpers/metrics.js";
 /**
  * Fetch the next unique account index from the local index allocator service.
  *
- * - `scripts/run-with-logs.ts` starts a tiny HTTP server per test run.
+ * - `scripts/run-scenario.ts` starts a tiny HTTP server per test run.
  * - It exposes `GET /next` which returns `{ index: 0 }`, `{ index: 1 }`, ...
  * - This is how we guarantee global uniqueness/sequentiality across Artillery VUs,
  *   even when Artillery runs VUs in multiple isolated JS sandboxes (where in-process

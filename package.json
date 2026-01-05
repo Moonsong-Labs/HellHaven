@@ -11,7 +11,7 @@
     "lint": "biome lint .",
     "lint:fix": "biome lint . --write",
     "build": "tsc -p tsconfig.json",
-    "with-logs": "pnpm exec tsx scripts/run-with-logs.ts --",
+    "with-logs": "pnpm exec tsx scripts/run-scenario.ts --",
     "run:with-logs": "pnpm build && pnpm with-logs",
     "test:run": "pnpm run:with-logs artillery run",
 
