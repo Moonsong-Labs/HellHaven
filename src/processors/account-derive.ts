@@ -102,9 +102,6 @@ export async function deriveAccount(
     cacheAccountIndex(scenarioVars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
-    if (!derived.privateKey) {
-      throw new Error("Derived account has no privateKey available");
-    }
 
     persistVars(context, {
       privateKey: derived.privateKey,
