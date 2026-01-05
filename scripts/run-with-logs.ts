@@ -31,12 +31,6 @@ async function startIndexAllocator(
     (req: IncomingMessage, res: ServerResponse) => {
       try {
         const url = req.url ?? "/";
-        if (req.method === "GET" && url.startsWith("/health")) {
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify({ ok: true }));
-          return;
-        }
-
         if (req.method === "GET" && url.startsWith("/next")) {
           const idx = counter++;
           res.writeHead(200, { "content-type": "application/json" });
