@@ -99,6 +99,9 @@ function parseWorkerIndex(raw: string | undefined): number {
  * - Deterministic: same seed => same sequence
  * - Not cryptographically secure (fine for load-test user selection)
  * - Returns values in [0, 1)
+ *
+ * Used only when `ACCOUNT_MODE=random` and `ACCOUNT_RANDOM_SEED` is set, so test runs
+ * are reproducible.
  */
 function lcg(seed: number): () => number {
   let state = seed >>> 0;
