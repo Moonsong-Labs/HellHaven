@@ -37,7 +37,7 @@ export async function deriveAndPrint(
     const vars = context.vars;
 
     const mnemonic = readRequiredEnv("TEST_MNEMONIC");
-    const selection = selectAccountIndex(vars);
+    const selection: AccountIndexSelection = selectAccountIndex(vars);
     cacheAccountIndex(vars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
