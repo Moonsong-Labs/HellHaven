@@ -10,6 +10,7 @@
     "fmt:fix": "biome format . --write",
     "lint": "biome lint .",
     "lint:fix": "biome lint . --write",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
     "with-logs": "pnpm exec tsx scripts/run-scenario.ts --",
     "run:with-logs": "pnpm build && pnpm with-logs",
