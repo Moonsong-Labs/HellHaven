@@ -114,9 +114,9 @@ function ensureLogFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   }
 
   const runIdRaw =
-    (env.RUN_ID && env.RUN_ID.trim().length > 0
+    env.RUN_ID && env.RUN_ID.trim().length > 0
       ? env.RUN_ID.trim()
-      : undefined) ?? `${nowStamp()}-${randomSuffix()}`;
+      : `${nowStamp()}-${randomSuffix()}`;
   const runId = sanitizeRunId(runIdRaw);
 
   const dir = join(process.cwd(), "logs");
