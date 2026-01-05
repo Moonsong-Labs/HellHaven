@@ -1,20 +1,36 @@
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import * as http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { join } from "node:path";
 
-type AllocatorConfig = Readonly<{
+/**
+ * Scenario runner wrapper used by `pnpm test:run` to provide TWO core features:
+ *
+ * 1) **Per-run logs**
+ *    Ensures JSONL logging is written to a run-specific file via `LOG_FILE` + `RUN_ID`.
+ *
+ * 2) **Unique account indices across VUs**
+ *    Starts a local "index allocator" HTTP server and sets `INDEX_ALLOCATOR_URL` for
+ *    the child process. This avoids duplicated indices when Artillery VUs run in
+ *    isolated JS sandboxes (where in-process counters can repeat).
+ *
+ * Consumer:
+ * `src/processors/account-derive.ts` calls `${INDEX_ALLOCATOR_URL}/next` to get a unique
+ * derivation index per VU (see `fetchNextIndex()` / `deriveAccount()`).
+ */
+
+type IndexAllocatorConfig = Readonly<{
   startIndex: number;
 }>;
 
-function parseStartIndex(raw: string | undefined): number {
+function parseIndexAllocatorStart(raw: string | undefined): number {
   if (!raw) return 0;
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n) || n < 0) {
     // eslint-disable-next-line no-console
     console.error(
-      `[run-with-logs] Invalid INDEX_ALLOCATOR_START=${String(
+      `[run-scenario] Invalid INDEX_ALLOCATOR_START=${String(
         raw
       )} (expected integer >= 0)`
     );
@@ -23,14 +39,17 @@ function parseStartIndex(raw: string | undefined): number {
   return n;
 }
 
-async function startIndexAllocator(
-  cfg: AllocatorConfig
+async function startIndexAllocatorServer(
+  cfg: IndexAllocatorConfig
 ): Promise<Readonly<{ url: string; close: () => Promise<void> }>> {
   let counter = cfg.startIndex;
   const server = http.createServer(
     (req: IncomingMessage, res: ServerResponse) => {
       try {
         const url = req.url ?? "/";
+
+        // Endpoint:
+        // - GET /next -> { index: number }
         if (req.method === "GET" && url.startsWith("/next")) {
           const idx = counter++;
           res.writeHead(200, { "content-type": "application/json" });
@@ -72,16 +91,16 @@ function usageAndExit(): never {
   console.error(
     [
       "Usage:",
-      "  pnpm exec tsx scripts/run-with-logs.ts -- <command> [args...]",
+      "  pnpm exec tsx scripts/run-scenario.ts -- <command> [args...]",
       "",
-      "Behavior:",
-      "  - If LOG_FILE is set, it is used as-is.",
-      "  - Else if RUN_ID is set, LOG_FILE becomes ./logs/run-<RUN_ID>.jsonl",
-      "  - Else RUN_ID is generated and LOG_FILE becomes ./logs/run-<RUN_ID>.jsonl",
+      "Core features:",
+      "  - Per-run logs: sets LOG_FILE / RUN_ID if not already set.",
+      "  - Index allocator: starts a local server and sets INDEX_ALLOCATOR_URL for the child process.",
+      "    (Consumed by src/processors/account-derive.ts via GET /next.)",
       "",
       "Examples:",
-      "  pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/examples.getProfile.yml",
-      "  LOG_FILE=./logs/my-run.jsonl pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/examples.getProfile.yml",
+      "  pnpm exec tsx scripts/run-scenario.ts -- artillery run scenarios/examples.getProfile.yml",
+      "  LOG_FILE=./logs/my-run.jsonl pnpm exec tsx scripts/run-scenario.ts -- artillery run scenarios/examples.getProfile.yml",
     ].join("\n")
   );
   process.exit(2);
@@ -102,7 +121,7 @@ function sanitizeRunId(raw: string): string {
   return raw.replaceAll(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
 }
 
-function ensureLogFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function ensureRunLogEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   if (env.LOG_FILE && env.LOG_FILE.trim().length > 0) {
     return env;
   }
@@ -130,24 +149,24 @@ const cmd = process.argv[sepIdx + 1];
 if (!cmd) usageAndExit();
 
 const args = process.argv.slice(sepIdx + 2);
-const withLogs = ensureLogFileEnv(process.env);
 
-// Primary source of unique account indices:
-// Always start the local allocator for every run and always inject its URL
-// into the child process (ignore any pre-existing INDEX_ALLOCATOR_URL).
-const allocator = await startIndexAllocator({
-  startIndex: parseStartIndex(process.env.INDEX_ALLOCATOR_START),
+// Core feature #1: per-run logs
+const runLogEnv = ensureRunLogEnv(process.env);
+
+// Core feature #2: shared unique account indices for the run
+const allocator = await startIndexAllocatorServer({
+  startIndex: parseIndexAllocatorStart(process.env.INDEX_ALLOCATOR_START),
 });
 
 const childEnv: NodeJS.ProcessEnv = {
-  ...withLogs,
+  ...runLogEnv,
   INDEX_ALLOCATOR_URL: allocator.url,
 };
 
 // eslint-disable-next-line no-console
-console.log(`[run-with-logs] LOG_FILE=${childEnv.LOG_FILE}`);
+console.log(`[run-scenario] LOG_FILE=${childEnv.LOG_FILE}`);
 // eslint-disable-next-line no-console
-console.log(`[run-with-logs] INDEX_ALLOCATOR_URL=${allocator.url}`);
+console.log(`[run-scenario] INDEX_ALLOCATOR_URL=${allocator.url}`);
 
 const child = spawn(cmd, args, {
   stdio: "inherit",
@@ -170,3 +189,5 @@ child.on("exit", (code, signal) => {
     process.exit(code ?? 1);
   })();
 });
+
+
