@@ -1,14 +1,13 @@
-import { MspClient, type Session } from "@storagehub-sdk/msp-client";
+import { MspClient, type Session } from "@storagehub-sdk/msp-client"; ß
 import { StorageHubClient } from "@storagehub-sdk/core";
 import { getLogger } from "../log.js";
 import { NETWORKS } from "../networks.js";
 import { toError } from "../helpers/errors.js";
-import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
+import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js"; ß
 import { createBucket, makeBucketName } from "../buckets.js";
 import {
   ensureVars,
   getPersistedVar,
-  persistVars,
   requireVarString,
   type ArtilleryContext,
   type ArtilleryEvents,

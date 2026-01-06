@@ -19,4 +19,53 @@ export function ensure0xPrefix(raw: string, bytes?: number): `0x${string}` {
     }
   }
   return value;
+} ß
+
+export type Dict = Readonly<Record<string, unknown>>;
+
+/**
+ * Require an object-like dictionary at a runtime boundary.
+ *
+ * Note: This intentionally does not try to validate nested shapes; it just ensures
+ * we can safely index into the returned value.
+ */
+export function requireDict(value: unknown, label: string): Dict {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${label} is not an object`);
+  }
+  return value as Dict;
+}
+
+/**
+ * Require a non-empty string.
+ */
+export function requireNonEmptyString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+/**
+ * Require an integer-like value.
+ *
+ * Accepts:
+ * - integer numbers
+ * - numeric strings representing integers (e.g. "42")
+ */
+export function requireInteger(value: unknown, label: string): number {
+  let n: number;
+  if (typeof value === "number") {
+    n = value;
+  } else if (typeof value === "string") {
+    n = Number(value);
+  } else {
+    throw new Error(`${label} must be an integer`);
+  }
+
+  if (!Number.isInteger(n)) {
+    throw new Error(`${label} must be an integer`);
+  }
+
+  return n;
 }

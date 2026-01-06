@@ -19,7 +19,7 @@ import { createEmitter } from "../helpers/metrics.js";
 /**
  * Fetch the next unique account index from the local index allocator service.
  *
- * - `scripts/run-with-logs.ts` starts a tiny HTTP server per test run.
+ * - `scripts/run-scenario.ts` starts a tiny HTTP server per test run.
  * - It exposes `GET /next` which returns `{ index: 0 }`, `{ index: 1 }`, ...
  * - This is how we guarantee global uniqueness/sequentiality across Artillery VUs,
  *   even when Artillery runs VUs in multiple isolated JS sandboxes (where in-process
@@ -93,32 +93,8 @@ export async function deriveAccount(
       // When allocator is enabled, override the selection once per VU
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
-        const allocatorIdx = await fetchNextIndex();
-
-        // Apply modulo to respect ACCOUNT_INDEX_COUNT (cycle through account range)
-        const startRaw = vars.ACCOUNT_INDEX_START;
-        const countRaw = vars.ACCOUNT_INDEX_COUNT;
-
-        const start =
-          typeof startRaw === "number"
-            ? startRaw
-            : typeof startRaw === "string"
-              ? Number(startRaw)
-              : 0;
-        const count =
-          typeof countRaw === "number"
-            ? countRaw
-            : typeof countRaw === "string"
-              ? Number(countRaw)
-              : 1000;
-
-        const idx = start + (allocatorIdx % count);
-
-        selection = {
-          mode: "byIndex",
-          index: idx,
-          source: `allocator:/next(raw=${allocatorIdx})`,
-        };
+        const idx = await fetchNextIndex();
+        selection = { mode: "byIndex", index: idx, source: "allocator:/next" };
         persistVars(context, { accountIndex: idx });
       }
     }
@@ -126,9 +102,6 @@ export async function deriveAccount(
     cacheAccountIndex(scenarioVars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
-    if (!derived.privateKey) {
-      throw new Error("Derived account has no privateKey available");
-    }
 
     persistVars(context, {
       privateKey: derived.privateKey,
@@ -136,7 +109,7 @@ export async function deriveAccount(
       __derivationPath: derived.derivation.path,
     });
 
-    logger.info(
+    logger.debug(
       {
         index: selection.index,
         path: derived.derivation.path,

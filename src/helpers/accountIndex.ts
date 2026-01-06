@@ -1,3 +1,10 @@
+import {
+  requireDict,
+  requireInteger,
+  requireNonEmptyString,
+  type Dict,
+} from "./validation.js";
+
 export type AccountMode = "byIndex" | "sequential" | "random";
 
 export type AccountIndexSelection = Readonly<{
@@ -10,36 +17,76 @@ export type AccountIndexSelection = Readonly<{
   source: string;
 }>;
 
-export type ContextVars = Record<string, unknown> | undefined;
-
 let sequentialCounter = 0;
 
-function asInt(value: unknown): number | undefined {
-  if (typeof value === "number")
-    return Number.isInteger(value) ? value : undefined;
-  if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isInteger(n) ? n : undefined;
+/**
+ * Strict parsing/validation entry point for account-index selection.
+ *
+ * Why:
+ * `context.vars` is an untyped runtime boundary (Artillery), so we validate once up-front
+ * and then operate on a typed structure.
+ */
+
+export type ParsedAccountIndexConfig =
+  | Readonly<{ mode: "byIndex"; accountIndex: number; source: string }>
+  | Readonly<{ mode: "sequential"; start: number; count: number }>
+  | Readonly<{ mode: "random"; start: number; count: number; seed?: number }>;
+
+export function parseAccountIndexConfig(
+  rawVars: unknown
+): ParsedAccountIndexConfig {
+  const vars = requireDict(rawVars, "context.vars");
+
+  const modeRaw = requireNonEmptyString(vars.ACCOUNT_MODE, "ACCOUNT_MODE");
+  if (
+    modeRaw !== "byIndex" &&
+    modeRaw !== "sequential" &&
+    modeRaw !== "random"
+  ) {
+    throw new Error(
+      `Missing or invalid ACCOUNT_MODE: ${modeRaw} (expected 'byIndex', 'sequential', or 'random')`
+    );
   }
-  return undefined;
-}
 
-function readInt(vars: ContextVars, key: string): number | undefined {
-  return asInt(vars?.[key]);
-}
+  if (modeRaw === "byIndex") {
+    // Payload override is allowed (if present):
+    if (vars.accountIndex !== undefined) {
+      const idx = requireInteger(vars.accountIndex, "accountIndex");
+      if (idx < 0) throw new Error("accountIndex must be >= 0");
+      return {
+        mode: "byIndex",
+        accountIndex: idx,
+        source: "payload:accountIndex",
+      };
+    }
 
-function readString(vars: ContextVars, key: string): string | undefined {
-  const raw = vars?.[key];
-  if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
-  return undefined;
-}
-
-function requireInt(vars: ContextVars, key: string): number {
-  const n = readInt(vars, key);
-  if (typeof n !== "number") {
-    throw new Error(`Missing or invalid integer var: ${key}`);
+    const idx = requireInteger(vars.ACCOUNT_INDEX, "ACCOUNT_INDEX");
+    if (idx < 0) throw new Error("ACCOUNT_INDEX must be >= 0");
+    return {
+      mode: "byIndex",
+      accountIndex: idx,
+      source: "variables:ACCOUNT_INDEX",
+    };
   }
-  return n;
+
+  const start = requireInteger(vars.ACCOUNT_INDEX_START, "ACCOUNT_INDEX_START");
+  const count = requireInteger(vars.ACCOUNT_INDEX_COUNT, "ACCOUNT_INDEX_COUNT");
+  if (start < 0) throw new Error("ACCOUNT_INDEX_START must be >= 0");
+  if (count <= 0) throw new Error("ACCOUNT_INDEX_COUNT must be > 0");
+
+  if (modeRaw === "sequential") {
+    return { mode: "sequential", start, count };
+  }
+
+  // random
+  if (vars.ACCOUNT_RANDOM_SEED !== undefined) {
+    const seed = requireInteger(
+      vars.ACCOUNT_RANDOM_SEED,
+      "ACCOUNT_RANDOM_SEED"
+    );
+    return { mode: "random", start, count, seed };
+  }
+  return { mode: "random", start, count };
 }
 
 function normalizeMode(raw: unknown): AccountMode {
@@ -65,6 +112,9 @@ function parseWorkerIndex(raw: string | undefined): number {
  * - Deterministic: same seed => same sequence
  * - Not cryptographically secure (fine for load-test user selection)
  * - Returns values in [0, 1)
+ *
+ * Used only when `ACCOUNT_MODE=random` and `ACCOUNT_RANDOM_SEED` is set, so test runs
+ * are reproducible.
  */
 function lcg(seed: number): () => number {
   let state = seed >>> 0;
@@ -75,19 +125,26 @@ function lcg(seed: number): () => number {
   };
 }
 
-export function selectAccountIndex(vars: ContextVars): AccountIndexSelection {
+export function selectAccountIndex(rawVars: unknown): AccountIndexSelection {
+  // Entry point: `context.vars` must be an object; fail fast on misconfigured scenarios/callers.
+  const vars = requireDict(rawVars, "context.vars");
+
   // Cache: keep index stable for the duration of the VU.
-  const cached = readInt(vars, "__accountIndex");
-  if (typeof cached === "number" && cached >= 0) {
-    const cachedModeRaw = readString(vars, "__accountMode") ?? "byIndex";
-    const cachedMode = ((): AccountMode => {
-      try {
-        return normalizeMode(cachedModeRaw);
-      } catch {
-        return "byIndex";
-      }
-    })();
-    const cachedSource = readString(vars, "__accountIndexSource") ?? "cached";
+  if (vars.__accountIndex !== undefined) {
+    const cached = requireInteger(vars.__accountIndex, "__accountIndex");
+    if (cached < 0) throw new Error("__accountIndex must be >= 0");
+
+    const cachedModeRaw = requireNonEmptyString(
+      vars.__accountMode ?? "byIndex",
+      "__accountMode"
+    );
+    const cachedMode = normalizeMode(cachedModeRaw);
+
+    const cachedSource = requireNonEmptyString(
+      vars.__accountIndexSource ?? "cached",
+      "__accountIndexSource"
+    );
+
     return {
       mode: cachedMode,
       index: cached,
@@ -95,51 +152,42 @@ export function selectAccountIndex(vars: ContextVars): AccountIndexSelection {
     };
   }
 
-  const mode = normalizeMode(readString(vars, "ACCOUNT_MODE"));
-
-  if (mode === "byIndex") {
-    // Payload override is allowed:
-    const fromPayload = readInt(vars, "accountIndex");
-    if (typeof fromPayload === "number") {
-      if (fromPayload < 0) throw new Error("accountIndex must be >= 0");
-      return { mode, index: fromPayload, source: "payload:accountIndex" };
-    }
-
-    const fromYaml = requireInt(vars, "ACCOUNT_INDEX");
-    if (fromYaml < 0) throw new Error("ACCOUNT_INDEX must be >= 0");
-    return { mode, index: fromYaml, source: "variables:ACCOUNT_INDEX" };
-  }
-
-  const start = requireInt(vars, "ACCOUNT_INDEX_START");
-  const count = requireInt(vars, "ACCOUNT_INDEX_COUNT");
-  if (start < 0) throw new Error("ACCOUNT_INDEX_START must be >= 0");
-  if (count <= 0) throw new Error("ACCOUNT_INDEX_COUNT must be > 0");
+  // Strict entry point: validate once, then operate on typed config.
+  const cfg = parseAccountIndexConfig(vars);
 
   const workerOffset = parseWorkerIndex(process.env.ARTILLERY_WORKER_INDEX);
 
-  if (mode === "sequential") {
+  if (cfg.mode === "byIndex") {
+    return {
+      mode: "byIndex",
+      index: cfg.accountIndex,
+      source: cfg.source,
+    };
+  }
+
+  if (cfg.mode === "sequential") {
     const local = sequentialCounter++;
-    const idx = start + ((local + workerOffset) % count);
+    const idx = cfg.start + ((local + workerOffset) % cfg.count);
     if (idx < 0) throw new Error("Derived index must be >= 0");
     return {
-      mode,
+      mode: "sequential",
       index: idx,
       source: `sequential(local=${local}, workerOffset=${workerOffset})`,
     };
   }
 
   // random
-  const seed = readInt(vars, "ACCOUNT_RANDOM_SEED");
-  const rnd = typeof seed === "number" ? lcg(seed + workerOffset) : Math.random;
-  const pick = Math.floor(rnd() * count);
-  const idx = start + pick;
+  const rnd =
+    typeof cfg.seed === "number" ? lcg(cfg.seed + workerOffset) : Math.random;
+  const pick = Math.floor(rnd() * cfg.count);
+  const idx = cfg.start + pick;
   if (idx < 0) throw new Error("Derived index must be >= 0");
   return {
-    mode,
+    mode: "random",
     index: idx,
     source:
-      typeof seed === "number"
-        ? `random(seed=${seed}, workerOffset=${workerOffset})`
+      typeof cfg.seed === "number"
+        ? `random(seed=${cfg.seed}, workerOffset=${workerOffset})`
         : `random(unseeded, workerOffset=${workerOffset})`,
   };
 }

@@ -12,11 +12,11 @@ export type DerivedAccount = Readonly<{
   account: HDAccount;
   derivation: DerivationInfo;
   /**
-   * Derived private key (hex, 0x-prefixed) if available.
+   * Derived private key (hex, 0x-prefixed).
    *
    * IMPORTANT: Never log this unless explicitly gated by config.
    */
-  privateKey?: Hex;
+  privateKey: Hex;
 }>;
 
 export function derivePath(index: number): `m/44'/60'/${string}` {
@@ -45,18 +45,17 @@ export function deriveAccountFromMnemonic(
       ? toHex(hdKey.privateKey)
       : undefined;
 
-  const base: {
-    account: HDAccount;
-    derivation: DerivationInfo;
-    privateKey?: Hex;
-  } = {
-    account,
-    derivation: { index, path },
-  };
-
-  if (privateKey) {
-    base.privateKey = privateKey;
+  if (!privateKey) {
+    // Sanity check: `mnemonicToAccount(...).getHdKey()` should normally yield a private key
+    // for a valid mnemonic + derivation path. If this happens, something is unexpectedly
+    // wrong (or the underlying library behavior changed), and callers cannot proceed
+    // because they always require a signer.
+    throw new Error("Derived account has no privateKey available");
   }
 
-  return base;
+  return {
+    account,
+    derivation: { index, path },
+    privateKey,
+  };
 }
