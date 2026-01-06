@@ -53,7 +53,7 @@ function usage(): never {
       '  pnpm util:fund-accounts -- --mnemonic "..." [--count 10] [--start 0] [--json|--tsv]',
       "",
       "  # Fund recipients (native token transfers):",
-      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 [--count 10] [--start 0] [--batchSize 10] --yes',
+      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 [--count 10] [--start 0] [--batchSize 10]',
       "",
       "Alternatively set env var TEST_MNEMONIC and omit --mnemonic.",
       "",
@@ -64,8 +64,8 @@ function usage(): never {
       "Examples:",
       '  TEST_MNEMONIC="..." pnpm util:fund-accounts -- --count 10',
       '  pnpm util:fund-accounts -- --mnemonic "..." --start 0 --count 10 --json',
-      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --count 10 --yes',
-      '  NETWORK=stagenet TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.1 --count 100 --batchSize 20 --yes',
+      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --count 10',
+      '  NETWORK=stagenet TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.1 --count 100 --batchSize 20',
     ].join("\n")
   );
   process.exit(1);
@@ -130,8 +130,22 @@ async function transferToAccount(
 }
 
 /**
- * Process transfers in batches with explicit nonce management.
- * This allows parallel submission without nonce conflicts.
+ * Send many native-token transfers with explicit nonce management.
+ *
+ *
+ * Why explicit nonces:
+ * - We read the sender's current nonce from the chain (using `blockTag: "pending"`).
+ * - We then assign nonces deterministically as:
+ *   `nonce = startNonce + globalOffset`, where `globalOffset` is the 0-based index
+ *   in the full `recipients` list.
+ *
+ * Why batching:
+ * - We submit up to `batchSize` transactions in parallel, then wait for them to be mined.
+ * - This keeps throughput high while avoiding overwhelming the RPC endpoint.
+ *
+ * Failure mode:
+ * - If one tx in a batch fails, this will throw. Some previous txs may still have been
+ *   sent/mined already (best-effort utility script).
  */
 async function transferBatch(
   walletClient: WalletClient,
@@ -160,9 +174,11 @@ async function transferBatch(
       `\nProcessing batch ${batchNum}/${totalBatches} (${batch.length} txs)...`
     );
 
-    // Submit all transactions in this batch in parallel with explicit nonces
+    // Submit all txs in this batch in parallel with explicit nonces.
+    // Note: `i` is the start offset of this batch in the overall recipients list.
     const promises = batch.map((recipient, batchIdx) => {
-      const nonce = startNonce + i + batchIdx;
+      const globalOffset = i + batchIdx;
+      const nonce = startNonce + globalOffset;
       return transferToAccount(
         walletClient,
         publicClient,
@@ -181,67 +197,55 @@ async function transferBatch(
   }
 }
 
-const mnemonic = readOptionalStringArg("mnemonic") ?? process.env.TEST_MNEMONIC?.trim();
-if (!mnemonic) usage();
+type PrintArgs = Readonly<{
+  mode: "print";
+  mnemonic: string;
+  start: number;
+  count: number;
+  format: "json" | "tsv" | "table";
+}>;
 
-const start = readOptionalNonNegativeIntArg("start") ?? 0;
-const count = readOptionalPositiveIntArg("count") ?? 10;
-const asJson = hasFlag("json");
-const asTsv = hasFlag("tsv");
-const dryRun = hasFlag("dry-run");
-const yes = hasFlag("yes");
+type FundArgs = Readonly<{
+  mode: "fund";
+  mnemonic: string;
+  start: number;
+  count: number;
+  batchSize: number;
+  networkName: ReturnType<typeof parseNetworkName>;
+  privateKeyRaw: string;
+  value: bigint;
+}>;
 
-const privateKeyRaw =
-  readOptionalStringArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
-// `--amount` is a native-token decimal amount (MOCK/STAGE/SH/etc depending on network).
-const amountRaw = readOptionalStringArg("amount");
-// Batch size for parallel processing (default: 10 transactions per batch)
-const batchSize = readOptionalPositiveIntArg("batchSize") ?? 10;
+function parseArgs(): PrintArgs | FundArgs {
+  const mnemonic =
+    readOptionalStringArg("mnemonic") ?? process.env.TEST_MNEMONIC?.trim();
+  if (!mnemonic) usage();
 
-const wantsFunding = Boolean(privateKeyRaw || amountRaw);
+  const start = readOptionalNonNegativeIntArg("start") ?? 0;
+  const count = readOptionalPositiveIntArg("count") ?? 10;
 
-const rows = Array.from({ length: count }, (_, i) => {
-  const idx = start + i;
-  const derived = deriveAccountFromMnemonic(mnemonic, idx);
-  return {
-    index: idx,
-    path: derived.derivation.path,
-    address: derived.account.address,
-  };
-});
+  const format: PrintArgs["format"] = hasFlag("json")
+    ? "json"
+    : hasFlag("tsv")
+      ? "tsv"
+      : "table";
 
-if (!wantsFunding) {
-  if (asJson) {
-    console.log(JSON.stringify(rows, null, 2));
-  } else if (asTsv) {
-    for (const r of rows) {
-      console.log(`${r.index}\t${r.path}\t${r.address}`);
-    }
-  } else {
-    printTable(rows, start, count);
+  const privateKeyRaw =
+    readOptionalStringArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
+  const amountRaw = readOptionalStringArg("amount");
+
+  const wantsFunding = Boolean(privateKeyRaw || amountRaw);
+  if (!wantsFunding) {
+    return { mode: "print", mnemonic, start, count, format };
   }
-} else {
+
   if (!privateKeyRaw) {
     throw new Error("Missing --privateKey (or env SENDER_PRIVATE_KEY)");
   }
   if (!amountRaw) throw new Error("Missing --amount");
-  if (!yes && !dryRun) {
-    throw new Error(
-      "Refusing to send transactions without --yes (or use --dry-run)"
-    );
-  }
 
+  const batchSize = readOptionalPositiveIntArg("batchSize") ?? 10;
   const networkName = parseNetworkName(process.env.NETWORK?.trim() ?? "local");
-  const network = NETWORKS[networkName];
-  const { chain, transportUrl } = toViemChain(network);
-
-  const pk = ensure0xPrefix(privateKeyRaw, 32).toLowerCase() as Hex;
-  const account = privateKeyToAccount(pk);
-  const walletClient = createViemWallet(network, account);
-  const publicClient = createPublicClient({
-    chain,
-    transport: http(transportUrl),
-  });
 
   let value: bigint;
   try {
@@ -250,34 +254,71 @@ if (!wantsFunding) {
     throw new Error(`Invalid --amount: ${String(amountRaw)}`);
   }
 
-  console.log(
-    `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${value} wei${dryRun ? " (dry-run)" : ""} (batchSize=${batchSize})`
-  );
+  return {
+    mode: "fund",
+    mnemonic,
+    start,
+    count,
+    batchSize,
+    networkName,
+    privateKeyRaw,
+    value,
+  };
+}
 
-  if (dryRun) {
+const args = parseArgs();
+
+const rows = Array.from({ length: args.count }, (_, i) => {
+  const idx = args.start + i;
+  const derived = deriveAccountFromMnemonic(args.mnemonic, idx);
+  return {
+    index: idx,
+    path: derived.derivation.path,
+    address: derived.account.address,
+  };
+});
+
+if (args.mode === "print") {
+  if (args.format === "json") {
+    console.log(JSON.stringify(rows, null, 2));
+  } else if (args.format === "tsv") {
     for (const r of rows) {
-      const to = r.address as Address;
-      console.log(`[dry-run] -> ${to} value=${value} wei (index=${r.index})`);
+      console.log(`${r.index}\t${r.path}\t${r.address}`);
     }
   } else {
-    const recipients = rows.map((r) => ({
-      to: r.address as Address,
-      value,
-      index: r.index,
-    }));
-
-    const startTime = Date.now();
-    await transferBatch(
-      walletClient,
-      publicClient,
-      account,
-      recipients,
-      batchSize
-    );
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-
-    console.log(
-      `\n✅ All ${recipients.length} transfers completed in ${elapsed}s`
-    );
+    printTable(rows, args.start, args.count);
   }
+} else {
+  const network = NETWORKS[args.networkName];
+  const { chain, transportUrl } = toViemChain(network);
+
+  const pk = ensure0xPrefix(args.privateKeyRaw, 32).toLowerCase() as Hex;
+  const account = privateKeyToAccount(pk);
+  const walletClient = createViemWallet(network, account);
+  const publicClient = createPublicClient({
+    chain,
+    transport: http(transportUrl),
+  });
+
+  console.log(
+    `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${args.value} wei (batchSize=${args.batchSize})`
+  );
+
+  const recipients = rows.map((r) => ({
+    to: r.address as Address,
+    value: args.value,
+    index: r.index,
+  }));
+
+  const startTime = Date.now();
+  await transferBatch(
+    walletClient,
+    publicClient,
+    account,
+    recipients,
+    args.batchSize
+  );
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+  console.log(`\n✅ All ${recipients.length} transfers completed in ${elapsed}s`);
 }
