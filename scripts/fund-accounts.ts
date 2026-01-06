@@ -54,7 +54,6 @@ function usage(): never {
       "",
       "  # Fund recipients (native token transfers):",
       '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 [--count 10] [--start 0] [--batchSize 10] --yes',
-      '  NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amountWei 10000000000000000 [--count 10] [--start 0] [--batchSize 20] --yes',
       "",
       "Alternatively set env var TEST_MNEMONIC and omit --mnemonic.",
       "",
@@ -186,7 +185,7 @@ const mnemonic = readOptionalStringArg("mnemonic") ?? process.env.TEST_MNEMONIC?
 if (!mnemonic) usage();
 
 const start = readOptionalNonNegativeIntArg("start") ?? 0;
-const count = readOptionalNonNegativeIntArg("count") ?? 10;
+const count = readOptionalPositiveIntArg("count") ?? 10;
 const asJson = hasFlag("json");
 const asTsv = hasFlag("tsv");
 const dryRun = hasFlag("dry-run");
@@ -196,11 +195,10 @@ const privateKeyRaw =
   readOptionalStringArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
 // `--amount` is a native-token decimal amount (MOCK/STAGE/SH/etc depending on network).
 const amountRaw = readOptionalStringArg("amount");
-const amountWeiRaw = readOptionalStringArg("amountWei");
 // Batch size for parallel processing (default: 10 transactions per batch)
 const batchSize = readOptionalPositiveIntArg("batchSize") ?? 10;
 
-const wantsFunding = Boolean(privateKeyRaw || amountRaw || amountWeiRaw);
+const wantsFunding = Boolean(privateKeyRaw || amountRaw);
 
 const rows = Array.from({ length: count }, (_, i) => {
   const idx = start + i;
@@ -226,9 +224,7 @@ if (!wantsFunding) {
   if (!privateKeyRaw) {
     throw new Error("Missing --privateKey (or env SENDER_PRIVATE_KEY)");
   }
-  if ((amountRaw && amountWeiRaw) || (!amountRaw && !amountWeiRaw)) {
-    throw new Error("Provide exactly one of: --amount or --amountWei");
-  }
+  if (!amountRaw) throw new Error("Missing --amount");
   if (!yes && !dryRun) {
     throw new Error(
       "Refusing to send transactions without --yes (or use --dry-run)"
@@ -248,17 +244,10 @@ if (!wantsFunding) {
   });
 
   let value: bigint;
-  if (amountRaw) {
+  try {
     value = parseEther(amountRaw);
-  } else {
-    if (!amountWeiRaw) {
-      throw new Error("Missing --amountWei");
-    }
-    try {
-      value = BigInt(amountWeiRaw);
-    } catch {
-      throw new Error(`Invalid --amountWei: ${String(amountWeiRaw)}`);
-    }
+  } catch {
+    throw new Error(`Invalid --amount: ${String(amountRaw)}`);
   }
 
   console.log(
