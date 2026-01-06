@@ -1,7 +1,4 @@
-import {
-  requireDict,
-  requireInteger,
-} from "./validation.js";
+import { requireDict, requireInteger } from "./validation.js";
 
 export type AccountIndexSelection = Readonly<{
   index: number;

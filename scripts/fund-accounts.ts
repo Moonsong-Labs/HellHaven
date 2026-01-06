@@ -248,7 +248,8 @@ function parseArgs(): PrintArgs | FundArgs {
       : "table";
 
   const privateKeyRaw =
-    readOptionalStringArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
+    readOptionalStringArg("privateKey") ??
+    process.env.SENDER_PRIVATE_KEY?.trim();
   const amountRaw = readOptionalStringArg("amount");
 
   const wantsFunding = Boolean(privateKeyRaw || amountRaw);
@@ -337,5 +338,7 @@ if (args.mode === "print") {
   );
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-  console.log(`\n✅ All ${recipients.length} transfers completed in ${elapsed}s`);
+  console.log(
+    `\n✅ All ${recipients.length} transfers completed in ${elapsed}s`
+  );
 }
