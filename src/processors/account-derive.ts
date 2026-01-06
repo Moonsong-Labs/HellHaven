@@ -67,7 +67,9 @@ async function fetchNextIndex(): Promise<number> {
 
 /**
  * Processor step:
- * - pick an index (allocator if enabled, else ACCOUNT_MODE vars)
+ * - choose a derivation index:
+ *   - when run via `pnpm test:run`, use the local index allocator for unique indices across VUs
+ *   - otherwise, fall back to sequential selection via `ACCOUNT_INDEX_START/COUNT`
  * - derive account from TEST_MNEMONIC
  * - store derived privateKey + derivation info into context.vars
  */
@@ -94,8 +96,7 @@ export async function deriveAccount(
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
         const idx = await fetchNextIndex();
-        selection = { mode: "byIndex", index: idx, source: "allocator:/next" };
-        persistVars(context, { accountIndex: idx });
+        selection = { index: idx, source: "allocator:/next" };
       }
     }
     cacheAccountIndex(vars, selection);
