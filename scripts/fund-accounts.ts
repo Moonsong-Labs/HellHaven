@@ -18,7 +18,7 @@
  */
 import { deriveAccountFromMnemonic } from "../src/helpers/accounts.js";
 import { NETWORKS } from "../src/networks.js";
-import { parseNetworkName } from "../src/config.js";
+import { parseNetworkName, type NetworkName } from "../src/config.js";
 import {
   ensure0xPrefix,
   requireInteger,
@@ -94,6 +94,8 @@ type AccountRow = {
   address: string;
 };
 
+type Recipient = Readonly<{ to: Address; value: bigint; index: number }>;
+
 function printTable(rows: AccountRow[], start: number, count: number): void {
   const indexWidth = Math.max(String(start + count - 1).length, "index".length);
   const pathWidth = Math.max(
@@ -149,7 +151,6 @@ async function transferToAccount(
 /**
  * Send many native-token transfers with explicit nonce management.
  *
- *
  * Why explicit nonces:
  * - We read the sender's current nonce from the chain (using `blockTag: "pending"`).
  * - We then assign nonces deterministically as:
@@ -168,7 +169,7 @@ async function transferBatch(
   walletClient: WalletClient,
   publicClient: PublicClient,
   account: ReturnType<typeof privateKeyToAccount>,
-  recipients: Array<{ to: Address; value: bigint; index: number }>,
+  recipients: ReadonlyArray<Recipient>,
   batchSize: number
 ): Promise<void> {
   // Get current nonce from chain
@@ -214,23 +215,31 @@ async function transferBatch(
   }
 }
 
-type PrintArgs = Readonly<{
-  mode: "print";
+type OutputFormat = "json" | "tsv" | "table";
+
+type BaseArgs = Readonly<{
   mnemonic: string;
   start: number;
   count: number;
-  format: "json" | "tsv" | "table";
+}>;
+
+type PrintArgs = Readonly<{
+  mode: "print";
+  base: BaseArgs;
+  format: OutputFormat;
+}>;
+
+type FundingArgs = Readonly<{
+  networkName: NetworkName;
+  privateKeyRaw: string;
+  value: bigint;
+  batchSize: number;
 }>;
 
 type FundArgs = Readonly<{
   mode: "fund";
-  mnemonic: string;
-  start: number;
-  count: number;
-  batchSize: number;
-  networkName: ReturnType<typeof parseNetworkName>;
-  privateKeyRaw: string;
-  value: bigint;
+  base: BaseArgs;
+  funding: FundingArgs;
 }>;
 
 function parseArgs(): PrintArgs | FundArgs {
@@ -241,11 +250,13 @@ function parseArgs(): PrintArgs | FundArgs {
   const start = readOptionalNonNegativeIntArg("start") ?? 0;
   const count = readOptionalPositiveIntArg("count") ?? 10;
 
-  const format: PrintArgs["format"] = hasFlag("json")
+  const format: OutputFormat = hasFlag("json")
     ? "json"
     : hasFlag("tsv")
       ? "tsv"
       : "table";
+
+  const base: BaseArgs = { mnemonic, start, count };
 
   const privateKeyRaw =
     readOptionalStringArg("privateKey") ??
@@ -254,7 +265,7 @@ function parseArgs(): PrintArgs | FundArgs {
 
   const wantsFunding = Boolean(privateKeyRaw || amountRaw);
   if (!wantsFunding) {
-    return { mode: "print", mnemonic, start, count, format };
+    return { mode: "print", base, format } satisfies PrintArgs;
   }
 
   if (!privateKeyRaw) {
@@ -272,45 +283,48 @@ function parseArgs(): PrintArgs | FundArgs {
     throw new Error(`Invalid --amount: ${String(amountRaw)}`);
   }
 
-  return {
-    mode: "fund",
-    mnemonic,
-    start,
-    count,
-    batchSize,
-    networkName,
-    privateKeyRaw,
-    value,
-  };
+  const funding: FundingArgs = { networkName, privateKeyRaw, value, batchSize };
+  return { mode: "fund", base, funding } satisfies FundArgs;
 }
 
-const args = parseArgs();
+function deriveRows(base: BaseArgs): AccountRow[] {
+  return Array.from({ length: base.count }, (_, i) => {
+    const idx = base.start + i;
+    const derived = deriveAccountFromMnemonic(base.mnemonic, idx);
+    return {
+      index: idx,
+      path: derived.derivation.path,
+      address: derived.account.address,
+    };
+  });
+}
 
-const rows = Array.from({ length: args.count }, (_, i) => {
-  const idx = args.start + i;
-  const derived = deriveAccountFromMnemonic(args.mnemonic, idx);
-  return {
-    index: idx,
-    path: derived.derivation.path,
-    address: derived.account.address,
-  };
-});
+async function main(): Promise<void> {
+  const args = parseArgs();
+  const rows = deriveRows(args.base);
 
-if (args.mode === "print") {
-  if (args.format === "json") {
-    console.log(JSON.stringify(rows, null, 2));
-  } else if (args.format === "tsv") {
-    for (const r of rows) {
-      console.log(`${r.index}\t${r.path}\t${r.address}`);
+  if (args.mode === "print") {
+    if (args.format === "json") {
+      console.log(JSON.stringify(rows, null, 2));
+      return;
     }
-  } else {
-    printTable(rows, args.start, args.count);
+    if (args.format === "tsv") {
+      for (const r of rows) {
+        console.log(`${r.index}\t${r.path}\t${r.address}`);
+      }
+      return;
+    }
+    printTable(rows, args.base.start, args.base.count);
+    return;
   }
-} else {
-  const network = NETWORKS[args.networkName];
+
+  const network = NETWORKS[args.funding.networkName];
   const { chain, transportUrl } = toViemChain(network);
 
-  const pk = ensure0xPrefix(args.privateKeyRaw, 32).toLowerCase() as Hex;
+  const pk = ensure0xPrefix(
+    args.funding.privateKeyRaw,
+    32
+  ).toLowerCase() as Hex;
   const account = privateKeyToAccount(pk);
   const walletClient = createViemWallet(network, account);
   const publicClient = createPublicClient({
@@ -319,12 +333,12 @@ if (args.mode === "print") {
   });
 
   console.log(
-    `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${args.value} wei (batchSize=${args.batchSize})`
+    `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${args.funding.value} wei (batchSize=${args.funding.batchSize})`
   );
 
-  const recipients = rows.map((r) => ({
+  const recipients: Recipient[] = rows.map((r) => ({
     to: r.address as Address,
-    value: args.value,
+    value: args.funding.value,
     index: r.index,
   }));
 
@@ -334,7 +348,7 @@ if (args.mode === "print") {
     publicClient,
     account,
     recipients,
-    args.batchSize
+    args.funding.batchSize
   );
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -342,3 +356,10 @@ if (args.mode === "print") {
     `\n✅ All ${recipients.length} transfers completed in ${elapsed}s`
   );
 }
+
+// Execute the CLI entrypoint; convert any unhandled error into a non-zero exit code.
+void main().catch((err: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error(err);
+  process.exit(1);
+});
