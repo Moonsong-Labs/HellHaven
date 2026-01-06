@@ -19,7 +19,7 @@ export function ensure0xPrefix(raw: string, bytes?: number): `0x${string}` {
     }
   }
   return value;
-} ß
+}
 
 export type Dict = Readonly<Record<string, unknown>>;
 
