@@ -1,0 +1,34 @@
+config:
+  # Template scenario: init steps + action step (metrics-focused)
+  #
+  # Notes:
+  # - Provide `NETWORK` and `TEST_MNEMONIC` via env vars.
+  # - Use `muteMetrics`/`unmuteMetrics` to keep init step metrics out of the summary
+  #   while still surfacing error counters (e.g. `*.err`).
+  target: "http://localhost"
+  processor: "../dist/src/processors/index.js"
+  variables:
+    # Account index selection:
+    # - byIndex: all VUs use ACCOUNT_INDEX unless payload var `accountIndex` is provided
+    # - sequential/random: uses START/COUNT
+    ACCOUNT_MODE: byIndex
+    # Fallback if allocator isn't used (e.g. running Artillery directly without pnpm script)
+    ACCOUNT_INDEX: 0
+  phases:
+    - name: init-and-actions
+      duration: 60
+      arrivalRate: 5
+scenarios:
+  - name: getProfile
+    flow:
+      # Init (muted): derive + SIWE without polluting summary metrics
+      - function: muteMetrics
+      - function: deriveAccount
+      - function: SIWE
+      - function: unmuteMetrics
+      # Actions: focus metrics here
+      - loop:
+          - function: actionGetProfile
+        count: 100
+
+

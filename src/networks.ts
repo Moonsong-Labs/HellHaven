@@ -5,6 +5,11 @@ export type NetworkConfig = Readonly<{
   chain: Readonly<{
     id: number;
     name: string;
+    nativeCurrency: Readonly<{
+      name: string;
+      symbol: string;
+      decimals: number;
+    }>;
     evmRpcUrl: string;
     substrateWsUrl: `${"ws" | "wss"}://${string}`;
     filesystemPrecompileAddress: `0x${string}`;
@@ -26,6 +31,7 @@ export const NETWORKS: Readonly<Record<NetworkName, NetworkConfig>> = {
     chain: {
       id: 55931,
       name: "DataHaven Testnet",
+      nativeCurrency: { name: "DH Testnet", symbol: "MOCK", decimals: 18 },
       evmRpcUrl: "https://services.datahaven-testnet.network/testnet",
       substrateWsUrl: "wss://services.datahaven-testnet.network/testnet",
       filesystemPrecompileAddress: "0x0000000000000000000000000000000000000404",
@@ -42,6 +48,7 @@ export const NETWORKS: Readonly<Record<NetworkName, NetworkConfig>> = {
     chain: {
       id: 55932,
       name: "DataHaven Stagenet",
+      nativeCurrency: { name: "DH Stagenet", symbol: "STAGE", decimals: 18 },
       evmRpcUrl: "https://services.datahaven-dev.network/stagenet",
       substrateWsUrl: "wss://services.datahaven-dev.network/stagenet",
       filesystemPrecompileAddress: "0x0000000000000000000000000000000000000404",
@@ -58,6 +65,7 @@ export const NETWORKS: Readonly<Record<NetworkName, NetworkConfig>> = {
     chain: {
       id: 181222,
       name: "StorageHub Solochain EVM",
+      nativeCurrency: { name: "StorageHub", symbol: "SH", decimals: 18 },
       evmRpcUrl: "http://127.0.0.1:9888",
       substrateWsUrl: "ws://127.0.0.1:9888",
       filesystemPrecompileAddress: "0x0000000000000000000000000000000000000064",

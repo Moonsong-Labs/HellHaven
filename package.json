@@ -10,15 +10,19 @@
     "fmt:fix": "biome format . --write",
     "lint": "biome lint .",
     "lint:fix": "biome lint . --write",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
-    "preflight": "pnpm exec tsx scripts/preflight.ts",
-    "test": "pnpm build && pnpm preflight && pnpm exec artillery run scenarios/artillery.yml",
-    "test:msp-unauth": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.msp-unauth.yml",
-    "test:download": "pnpm build && pnpm exec tsx scripts/run-artillery-parallel.ts scenarios/artillery.download.yml"
+    "with-logs": "pnpm exec tsx scripts/run-scenario.ts --",
+    "run:with-logs": "pnpm build && pnpm with-logs",
+    "test:run": "pnpm run:with-logs artillery run",
+
+    "test:unauth": "pnpm test:run scenarios/msp.unauth.yml",
+    "test:examples.getProfile": "pnpm test:run scenarios/examples.getProfile.yml",
+    "test:download": "pnpm test:run scenarios/download.yml"
   },
   "dependencies": {
-    "@storagehub-sdk/core": "0.3.4",
-    "@storagehub-sdk/msp-client": "0.3.4",
+    "@storagehub-sdk/core": "0.4.0",
+    "@storagehub-sdk/msp-client": "0.4.0",
     "artillery": "^2.0.0",
     "pino": "^10.1.0",
     "viem": "^2.42.1"

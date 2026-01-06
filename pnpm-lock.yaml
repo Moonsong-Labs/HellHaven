@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@storagehub-sdk/core':
-        specifier: 0.3.4
-        version: 0.3.4(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3))
+        specifier: 0.4.0
+        version: 0.4.0(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3))
       '@storagehub-sdk/msp-client':
-        specifier: 0.3.4
-        version: 0.3.4(@storagehub-sdk/core@0.3.4(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3)))(viem@2.42.1(typescript@5.9.3))
+        specifier: 0.4.0
+        version: 0.4.0(@storagehub-sdk/core@0.4.0(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3)))(viem@2.42.1(typescript@5.9.3))
       artillery:
         specifier: ^2.0.0
         version: 2.0.27(@types/node@25.0.2)
@@ -1431,14 +1431,14 @@ packages:
   '@socket.io/component-emitter@3.1.2':
     resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
 
-  '@storagehub-sdk/core@0.3.4':
-    resolution: {integrity: sha512-CLr/PiwnNMi18h0vUjb1zYvx7MeespxB+FHhxwVQqsaByQ2sLfp6PpZhvKB3dBd+Wi85rt79LhubUYeGkIoqAA==}
+  '@storagehub-sdk/core@0.4.0':
+    resolution: {integrity: sha512-rXyWUExPFDTEqMNgWZniEtVXXCPsbYF25PY/a/ksN17Hb8poQkbRh6WRZXJLTNZCukR1aP9gw1Ty0D25yWCRiQ==}
     engines: {node: '>=22'}
     peerDependencies:
       viem: '>=2.38.3'
 
-  '@storagehub-sdk/msp-client@0.3.4':
-    resolution: {integrity: sha512-GQd85nLK9dLIQxqsZJ6IzmNt2uOAohRju+aXGyTtjAP0isrP1Asefsuzi55e1wZ/8x7P2ppJhhqVUcziOIhinw==}
+  '@storagehub-sdk/msp-client@0.4.0':
+    resolution: {integrity: sha512-qyDBN1gG5B+3nSP9H+QdTaiVJDnW29A2TL8Olcdc/7WCAMRlQLpBBaCHPb69bKZKb4Lmt6uN/9EKxsy4xXhT1A==}
     engines: {node: '>=22'}
     peerDependencies:
       '@storagehub-sdk/core': '>=0.0.5'
@@ -5489,7 +5489,7 @@ snapshots:
 
   '@socket.io/component-emitter@3.1.2': {}
 
-  '@storagehub-sdk/core@0.3.4(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3))':
+  '@storagehub-sdk/core@0.4.0(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3))':
     dependencies:
       '@polkadot/types': 16.5.4
       abitype: 1.2.2(typescript@5.9.3)
@@ -5501,9 +5501,9 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@storagehub-sdk/msp-client@0.3.4(@storagehub-sdk/core@0.3.4(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3)))(viem@2.42.1(typescript@5.9.3))':
+  '@storagehub-sdk/msp-client@0.4.0(@storagehub-sdk/core@0.4.0(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3)))(viem@2.42.1(typescript@5.9.3))':
     dependencies:
-      '@storagehub-sdk/core': 0.3.4(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3))
+      '@storagehub-sdk/core': 0.4.0(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3))
       viem: 2.42.1(typescript@5.9.3)
 
   '@substrate/ss58-registry@1.51.0': {}
