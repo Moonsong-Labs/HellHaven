@@ -2,26 +2,45 @@
 import { deriveAccountFromMnemonic } from "../src/helpers/accounts.js";
 import { NETWORKS } from "../src/networks.js";
 import { parseNetworkName } from "../src/config.js";
-import { ensure0xPrefix } from "../src/helpers/validation.js";
+import {
+  ensure0xPrefix,
+  requireInteger,
+  requireNonEmptyString,
+} from "../src/helpers/validation.js";
 import { createPublicClient, http, parseEther } from "viem";
 import type { Address, Hex, PublicClient, WalletClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { createViemWallet, toViemChain } from "../src/sdk/viemWallet.js";
 
-function readArg(name: string): string | undefined {
+function hasFlag(name: string): boolean {
+  return process.argv.includes(`--${name}`);
+}
+
+function readOptionalStringArg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
   if (idx === -1) return undefined;
   const v = process.argv[idx + 1];
-  if (!v || v.startsWith("--")) return undefined;
-  return v;
+  if (!v || v.startsWith("--")) {
+    throw new Error(`Missing value for --${name}`);
+  }
+  return requireNonEmptyString(v, `--${name}`);
 }
 
-function readIntArg(name: string, fallback: number): number {
-  const raw = readArg(name);
-  if (!raw) return fallback;
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < 0) {
-    throw new Error(`Invalid --${name}: ${raw}`);
+function readOptionalNonNegativeIntArg(name: string): number | undefined {
+  const raw = readOptionalStringArg(name);
+  if (raw === undefined) return undefined;
+  const n = requireInteger(raw, `--${name}`);
+  if (n < 0) {
+    throw new Error(`Invalid --${name}: ${String(n)} (expected integer >= 0)`);
+  }
+  return n;
+}
+
+function readOptionalPositiveIntArg(name: string): number | undefined {
+  const n = readOptionalNonNegativeIntArg(name);
+  if (n === undefined) return undefined;
+  if (n <= 0) {
+    throw new Error(`Invalid --${name}: ${String(n)} (expected integer > 0)`);
   }
   return n;
 }
@@ -163,23 +182,23 @@ async function transferBatch(
   }
 }
 
-const mnemonic = readArg("mnemonic") ?? process.env.TEST_MNEMONIC?.trim();
+const mnemonic = readOptionalStringArg("mnemonic") ?? process.env.TEST_MNEMONIC?.trim();
 if (!mnemonic) usage();
 
-const start = readIntArg("start", 0);
-const count = readIntArg("count", 10);
-const asJson = process.argv.includes("--json");
-const asTsv = process.argv.includes("--tsv");
-const dryRun = process.argv.includes("--dry-run");
-const yes = process.argv.includes("--yes");
+const start = readOptionalNonNegativeIntArg("start") ?? 0;
+const count = readOptionalNonNegativeIntArg("count") ?? 10;
+const asJson = hasFlag("json");
+const asTsv = hasFlag("tsv");
+const dryRun = hasFlag("dry-run");
+const yes = hasFlag("yes");
 
 const privateKeyRaw =
-  readArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
+  readOptionalStringArg("privateKey") ?? process.env.SENDER_PRIVATE_KEY?.trim();
 // `--amount` is a native-token decimal amount (MOCK/STAGE/SH/etc depending on network).
-const amountRaw = readArg("amount");
-const amountWeiRaw = readArg("amountWei");
+const amountRaw = readOptionalStringArg("amount");
+const amountWeiRaw = readOptionalStringArg("amountWei");
 // Batch size for parallel processing (default: 10 transactions per batch)
-const batchSize = readIntArg("batchSize", 10);
+const batchSize = readOptionalPositiveIntArg("batchSize") ?? 10;
 
 const wantsFunding = Boolean(privateKeyRaw || amountRaw || amountWeiRaw);
 
@@ -216,9 +235,7 @@ if (!wantsFunding) {
     );
   }
 
-  const networkName = parseNetworkName(
-    process.env.NETWORK?.trim() ?? readArg("NETWORK") ?? "local"
-  );
+  const networkName = parseNetworkName(process.env.NETWORK?.trim() ?? "local");
   const network = NETWORKS[networkName];
   const { chain, transportUrl } = toViemChain(network);
 
@@ -230,9 +247,19 @@ if (!wantsFunding) {
     transport: http(transportUrl),
   });
 
-  const value: bigint = amountRaw
-    ? parseEther(amountRaw)
-    : BigInt(amountWeiRaw as string);
+  let value: bigint;
+  if (amountRaw) {
+    value = parseEther(amountRaw);
+  } else {
+    if (!amountWeiRaw) {
+      throw new Error("Missing --amountWei");
+    }
+    try {
+      value = BigInt(amountWeiRaw);
+    } catch {
+      throw new Error(`Invalid --amountWei: ${String(amountWeiRaw)}`);
+    }
+  }
 
   console.log(
     `Funding ${rows.length} accounts on ${network.name} from ${account.address} with value=${value} wei${dryRun ? " (dry-run)" : ""} (batchSize=${batchSize})`
