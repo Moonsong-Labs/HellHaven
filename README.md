@@ -160,11 +160,7 @@ The muting is controlled by two processor steps:
 This keeps summaries focused on action timings while still surfacing setup/auth failures.
 
 ### What `deriveAccount` does
-<<<<<<< HEAD
-- Picks a unique account index (via the local index allocator started by `scripts/run-with-logs.ts`)
-=======
 - Picks a unique account index (via the local index allocator started by `scripts/run-scenario.ts`)
->>>>>>> origin/main
 - Derives an account from `TEST_MNEMONIC`
 - Persists `privateKey` (and derivation metadata) into Artillery vars for later steps
 
