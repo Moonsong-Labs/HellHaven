@@ -56,6 +56,25 @@ Local notes:
 - `pnpm test:download` — SIWE + download file scenario
 - `pnpm util:fund-accounts` — fund derived test accounts
 
+## Fund accounts utility
+
+`pnpm util:fund-accounts` is a small helper to print or fund EVM accounts derived from a mnemonic.
+
+Print first 10 derived addresses:
+
+```bash
+TEST_MNEMONIC="..." pnpm util:fund-accounts
+```
+
+Fund first 10 derived addresses (0.01 native token each):
+
+```bash
+NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --start 0 --count 10
+```
+
+Notes:
+- `--batchSize` controls parallelism per batch (default: 10). If `batchSize > count`, only `count` transfers are sent.
+
 List available scenarios:
 
 ```bash

@@ -1,4 +1,21 @@
 /* eslint-disable no-console */
+/**
+ * Utility: print or fund derived accounts from a mnemonic.
+ *
+ * Modes:
+ * - Print (no transfers): omit `--privateKey` and `--amount`
+ * - Fund (sends real transactions): provide `--privateKey` and `--amount`
+ *
+ * Examples:
+ * - Print first 10 derived addresses:
+ *   TEST_MNEMONIC="..." pnpm util:fund-accounts
+ *
+ * - Fund first 10 derived addresses (0.01 native token each):
+ *   NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --start 0 --count 10
+ *
+ * Notes:
+ * - `--batchSize` controls parallelism per batch (default: 10). If `batchSize > count`, only `count` transfers are sent.
+ */
 import { deriveAccountFromMnemonic } from "../src/helpers/accounts.js";
 import { NETWORKS } from "../src/networks.js";
 import { parseNetworkName } from "../src/config.js";
