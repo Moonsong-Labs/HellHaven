@@ -19,7 +19,9 @@ export type LogConfig = Readonly<{
 }>;
 
 function readLogLevel(): LogLevel {
-  const raw = (process.env.LOG_LEVEL ?? "error").toLowerCase();
+  // Default to "info" so key lifecycle logs are visible in Artillery runs
+  // without requiring extra env setup.
+  const raw = (process.env.LOG_LEVEL ?? "info").toLowerCase();
   if (
     raw === "fatal" ||
     raw === "error" ||
