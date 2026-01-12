@@ -42,6 +42,17 @@ function requireInt(vars: ContextVars, key: string): number {
   return n;
 }
 
+export function requireAccountIndexRange(vars: ContextVars): Readonly<{
+  start: number;
+  count: number;
+}> {
+  const start = requireInt(vars, "ACCOUNT_INDEX_START");
+  const count = requireInt(vars, "ACCOUNT_INDEX_COUNT");
+  if (start < 0) throw new Error("ACCOUNT_INDEX_START must be >= 0");
+  if (count <= 0) throw new Error("ACCOUNT_INDEX_COUNT must be > 0");
+  return { start, count };
+}
+
 function normalizeMode(raw: unknown): AccountMode {
   if (raw === "byIndex" || raw === "sequential" || raw === "random") return raw;
   throw new Error(
