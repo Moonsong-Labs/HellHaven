@@ -36,4 +36,4 @@ you can generate random files locally (bytes only; no units):
 pnpm exec tsx scripts/resources.ts --generate --count 10 --min-bytes 1048576 --max-bytes 1048576 --clean
 ```
 
-Safety: the generator enforces a **2 GiB** total cap per run (`count * max-bytes`), and will throw if exceeded.
+Safety: the generator enforces a **15 GiB** total cap per run (`count * max-bytes`), and will throw if exceeded.

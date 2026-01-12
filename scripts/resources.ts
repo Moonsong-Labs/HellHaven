@@ -114,7 +114,7 @@ function usageAndExit(): never {
       "Notes:",
       "  - Sizes are BYTES (no units).",
       "  - If min-bytes == max-bytes, files are generated at that exact size.",
-      "  - Safety cap: generation is limited to <= 2 GiB total (count * max-bytes).",
+      "  - Safety cap: generation is limited to <= 15 GiB total (count * max-bytes).",
       `  - Concurrency: ${CONCURRENCY}`,
     ].join("\n")
   );
@@ -220,11 +220,11 @@ async function generateRandomFiles(
 ): Promise<void> {
   if (!cfg.enabled) return;
 
-  const MAX_TOTAL_BYTES = 2n * 1024n * 1024n * 1024n; // 2 GiB safety cap per run
+  const MAX_TOTAL_BYTES = 15n * 1024n * 1024n * 1024n; // 15 GiB safety cap per run
   const worstCase = BigInt(cfg.count) * BigInt(cfg.maxBytes);
   if (worstCase > MAX_TOTAL_BYTES) {
     throw new Error(
-      `Refusing to generate: count*maxBytes=${worstCase.toString()} bytes exceeds 2GiB cap (${MAX_TOTAL_BYTES.toString()} bytes).`
+      `Refusing to generate: count*maxBytes=${worstCase.toString()} bytes exceeds 15GiB cap (${MAX_TOTAL_BYTES.toString()} bytes).`
     );
   }
 
@@ -256,7 +256,7 @@ async function generateRandomFiles(
 
   if (plannedTotal > MAX_TOTAL_BYTES) {
     throw new Error(
-      `Refusing to generate: plannedTotal=${plannedTotal.toString()} bytes exceeds 2GiB cap (${MAX_TOTAL_BYTES.toString()} bytes).`
+      `Refusing to generate: plannedTotal=${plannedTotal.toString()} bytes exceeds 15GiB cap (${MAX_TOTAL_BYTES.toString()} bytes).`
     );
   }
 
