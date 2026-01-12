@@ -1,10 +1,10 @@
 import {
   cacheAccountIndex,
+  requireAccountIndexRange,
   selectAccountIndex,
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import {
-  ensureScenarioVars,
   ensureVars,
   requireVarString,
   persistVars,
@@ -13,6 +13,7 @@ import {
   type Done,
 } from "../helpers/artillery.js";
 import { toError } from "../helpers/errors.js";
+import { readNumberEnv } from "../helpers/validation.js";
 import { getLogger } from "../log.js";
 import { createEmitter } from "../helpers/metrics.js";
 
@@ -37,32 +38,23 @@ async function fetchNextIndex(): Promise<number> {
     );
   }
 
-  const timeoutMsRaw = process.env.INDEX_ALLOCATOR_TIMEOUT_MS?.trim();
-  const timeoutMs =
-    timeoutMsRaw && timeoutMsRaw.length > 0
-      ? Number.parseInt(timeoutMsRaw, 10)
-      : 2000;
-  const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 2000;
+  const ms = readNumberEnv("INDEX_ALLOCATOR_TIMEOUT_MS", 2000);
 
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(`${baseUrl}/next`, { signal: ctrl.signal });
-    if (!res.ok) {
-      throw new Error(`allocator /next failed: HTTP ${res.status}`);
-    }
-    const body = (await res.json()) as unknown;
-    if (!body || typeof body !== "object") {
-      throw new Error("allocator response is not an object");
-    }
-    const idx = (body as { index?: unknown }).index;
-    if (!Number.isInteger(idx) || (idx as number) < 0) {
-      throw new Error(`allocator returned invalid index: ${String(idx)}`);
-    }
-    return idx as number;
-  } finally {
-    clearTimeout(t);
+  const res = await fetch(`${baseUrl}/next`, {
+    signal: AbortSignal.timeout(ms),
+  });
+  if (!res.ok) {
+    throw new Error(`allocator /next failed: HTTP ${res.status}`);
   }
+  const body = (await res.json()) as unknown;
+  if (!body || typeof body !== "object") {
+    throw new Error("allocator response is not an object");
+  }
+  const idx = (body as { index?: unknown }).index;
+  if (!Number.isInteger(idx) || (idx as number) < 0) {
+    throw new Error(`allocator returned invalid index: ${String(idx)}`);
+  }
+  return idx as number;
 }
 
 /**
@@ -81,7 +73,31 @@ export async function deriveAccount(
     const m = createEmitter(context, events);
     const logger = getLogger();
     const vars = ensureVars(context);
-    const scenarioVars = ensureScenarioVars(context);
+
+    // Idempotency: keep VU identity stable.
+    //
+    // Even though many scenarios call `deriveAccount` only once per VU, Artillery can execute
+    // the same VU flow multiple times (loops/repeats/long-lived VUs). This guard prevents
+    // accidentally deriving a *new* account for the same VU on subsequent iterations.
+    const existingPk = vars.privateKey;
+    const existingAddr = vars.__accountAddress;
+    const existingIndex = vars.__accountIndex;
+    if (
+      typeof existingPk === "string" &&
+      typeof existingAddr === "string" &&
+      typeof existingIndex === "number" &&
+      Number.isInteger(existingIndex) &&
+      existingIndex >= 0
+    ) {
+      logger.debug(
+        { address: existingAddr, hasIndex: typeof vars.__accountIndex === "number" },
+        "deriveAccount: already derived for this VU (skipping)"
+      );
+      m.counter("init.derive.ok", 1);
+      m.histogram("init.derive.ms", Date.now() - start);
+      done?.();
+      return;
+    }
 
     const mnemonic =
       process.env.TEST_MNEMONIC?.trim() ??
@@ -96,22 +112,7 @@ export async function deriveAccount(
         const allocatorIdx = await fetchNextIndex();
 
         // Apply modulo to respect ACCOUNT_INDEX_COUNT (cycle through account range)
-        const startRaw = vars.ACCOUNT_INDEX_START;
-        const countRaw = vars.ACCOUNT_INDEX_COUNT;
-
-        const start =
-          typeof startRaw === "number"
-            ? startRaw
-            : typeof startRaw === "string"
-              ? Number(startRaw)
-              : 0;
-        const count =
-          typeof countRaw === "number"
-            ? countRaw
-            : typeof countRaw === "string"
-              ? Number(countRaw)
-              : 1000;
-
+        const { start, count } = requireAccountIndexRange(vars);
         const idx = start + (allocatorIdx % count);
 
         selection = {
@@ -119,11 +120,10 @@ export async function deriveAccount(
           index: idx,
           source: `allocator:/next(raw=${allocatorIdx})`,
         };
-        persistVars(context, { accountIndex: idx });
+        persistVars(context, { __allocatorRawIndex: allocatorIdx });
       }
     }
     cacheAccountIndex(vars, selection);
-    cacheAccountIndex(scenarioVars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
     if (!derived.privateKey) {
