@@ -7,6 +7,7 @@ import {
 } from "viem";
 import type { Account } from "viem/accounts";
 import type { NetworkConfig } from "../networks.js";
+import { DEFAULT_EVM_RPC_TIMEOUT_MS } from "../config/constants.js";
 
 export type ViemChainAndTransport = Readonly<{
   chain: Chain;
@@ -33,6 +34,7 @@ export function createViemWallet(
   return createWalletClient({
     chain,
     account,
-    transport: http(transportUrl),
+    // Under load, `eth_estimateGas` can exceed default timeouts; use a safer baseline.
+    transport: http(transportUrl, { timeout: DEFAULT_EVM_RPC_TIMEOUT_MS }),
   });
 }
