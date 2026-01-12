@@ -24,12 +24,12 @@ import { createEmitter } from "../helpers/metrics.js";
 import { readEnv } from "../config.js";
 import { ensure0xPrefix, readNumberEnv } from "../helpers/validation.js";
 import { privateKeyToAccount } from "viem/accounts";
-import { createPublicClient } from "viem";
+import { createPublicClient, http } from "viem";
 import {
-  createViemHttpTransport,
   createViemWallet,
   toViemChain,
 } from "../sdk/viemWallet.js";
+import { DEFAULT_EVM_RPC_TIMEOUT_MS } from "../config/constants.js";
 import { randomInt, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import {
@@ -130,7 +130,7 @@ export async function actionCreateBucket(
     const { chain, transportUrl } = toViemChain(network);
     const publicClient = createPublicClient({
       chain,
-      transport: createViemHttpTransport(transportUrl),
+      transport: http(transportUrl, { timeout: DEFAULT_EVM_RPC_TIMEOUT_MS }),
     });
 
     // Check account balance
@@ -293,7 +293,7 @@ export async function actionGetOrCreateBucket(
     const { chain, transportUrl } = toViemChain(network);
     const publicClient = createPublicClient({
       chain,
-      transport: createViemHttpTransport(transportUrl),
+      transport: http(transportUrl, { timeout: DEFAULT_EVM_RPC_TIMEOUT_MS }),
     });
 
     const config = buildMspHttpClientConfig(network);
@@ -620,7 +620,7 @@ export async function actionWaitForStorageRequestOnChain(
     const { chain, transportUrl } = toViemChain(network);
     const publicClient = createPublicClient({
       chain,
-      transport: createViemHttpTransport(transportUrl),
+      transport: http(transportUrl, { timeout: DEFAULT_EVM_RPC_TIMEOUT_MS }),
     });
 
     const sr = await waitForStorageRequest({
