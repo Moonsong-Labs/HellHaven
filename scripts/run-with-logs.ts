@@ -82,8 +82,8 @@ function usageAndExit(): never {
       "",
       "Behavior:",
       "  - If LOG_FILE is set, it is used as-is.",
-      "  - Else if RUN_ID is set, LOG_FILE becomes ./logs/run-<RUN_ID>.jsonl",
-      "  - Else RUN_ID is generated and LOG_FILE becomes ./logs/run-<RUN_ID>.jsonl",
+      "  - Else if RUN_ID is set, LOG_FILE becomes ./logs/<RUN_ID>-run.jsonl",
+      "  - Else RUN_ID is generated and LOG_FILE becomes ./logs/<RUN_ID>-run.jsonl",
       "",
       "Examples:",
       "  pnpm exec tsx scripts/run-with-logs.ts -- artillery run scenarios/examples.getProfile.yml",
@@ -125,8 +125,29 @@ function ensureLogFileEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return {
     ...env,
     RUN_ID: runId,
-    LOG_FILE: join(dir, `run-${runId}.jsonl`),
+    LOG_FILE: join(dir, `${runId}-run.jsonl`),
   };
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
+}
+
+function ensureArtilleryOutputArg(
+  cmd: string,
+  args: string[],
+  runId: string
+): string[] {
+  // Only for: `artillery run ...`
+  if (cmd !== "artillery") return args;
+  if (args[0] !== "run") return args;
+
+  // Respect user-provided output path.
+  if (hasFlag(args, "--output") || hasFlag(args, "-o")) return args;
+
+  const dir = join(process.cwd(), "logs");
+  mkdirSync(dir, { recursive: true });
+  return [...args, "--output", join(dir, `${runId}-results.json`)];
 }
 
 const sepIdx = process.argv.indexOf("--");
@@ -150,12 +171,22 @@ const childEnv: NodeJS.ProcessEnv = {
   INDEX_ALLOCATOR_URL: allocator.url,
 };
 
+const runId = childEnv.RUN_ID ?? "unknown";
+const childArgs = ensureArtilleryOutputArg(cmd, args, runId);
+
 // eslint-disable-next-line no-console
 console.log(`[run-with-logs] LOG_FILE=${childEnv.LOG_FILE}`);
 // eslint-disable-next-line no-console
+if (cmd === "artillery" && childArgs[0] === "run") {
+  const outputIdx = childArgs.findIndex((a) => a === "--output" || a === "-o");
+  const outputPath =
+    outputIdx >= 0 ? childArgs[outputIdx + 1] : "(none / default)";
+  console.log(`[run-with-logs] ARTILLERY_OUTPUT=${String(outputPath)}`);
+}
+// eslint-disable-next-line no-console
 console.log(`[run-with-logs] INDEX_ALLOCATOR_URL=${allocator.url}`);
 
-const child = spawn(cmd, args, {
+const child = spawn(cmd, childArgs, {
   stdio: "inherit",
   env: childEnv,
   shell: process.platform === "win32",
