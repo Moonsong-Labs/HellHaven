@@ -6,17 +6,12 @@ export type ArtilleryEvents = Readonly<{
 
 export type ArtilleryContext = {
   vars?: Record<string, unknown>;
-  scenario?: {
-    vars?: Record<string, unknown>;
-  };
 };
 
 /**
  * Artillery context notes:
  * - `context` is scoped to a single VU (virtual user). `context.vars` is NOT global across VUs.
- * - Artillery may merge `context.scenario.vars` back into `context.vars` across steps/iterations.
- *   We use `persistVars()` for values that must persist reliably for the rest of a scenario/VU
- *   (e.g. derived account info, SIWE session, muting flags).
+ * - This repo intentionally persists per-VU state in `context.vars` only.
  */
 export function ensureVars(context: ArtilleryContext): Record<string, unknown> {
   if (!context.vars) context.vars = {};
@@ -24,32 +19,16 @@ export function ensureVars(context: ArtilleryContext): Record<string, unknown> {
 }
 
 /**
- * Ensure `context.scenario.vars` exists and return it.
- * Use this for values that must persist across scenario iterations/loops.
+ * Persist values for the lifetime of the VU.
  *
- * Side effect: may create `context.scenario` and/or `context.scenario.vars`.
- */
-export function ensureScenarioVars(
-  context: ArtilleryContext
-): Record<string, unknown> {
-  if (!context.scenario) context.scenario = {};
-  if (!context.scenario.vars) context.scenario.vars = {};
-  return context.scenario.vars;
-}
-
-/**
- * Persist values to both:
- * - context.vars (available immediately in the current step/iteration)
- * - context.scenario.vars (persists across iterations; Artillery merges scenario vars back into vars)
+ * NOTE: We intentionally only write to `context.vars` (VU-scoped).
  */
 export function persistVars(
   context: ArtilleryContext,
   patch: Record<string, unknown>
 ): void {
   const vars = ensureVars(context);
-  const svars = ensureScenarioVars(context);
   Object.assign(vars, patch);
-  Object.assign(svars, patch);
 }
 
 /**
@@ -95,10 +74,7 @@ export function readVarBool(
 }
 
 /**
- * Read a "persisted" var from Artillery context.
- *
- * Artillery may merge `context.scenario.vars` back into `context.vars` between steps/iterations.
- * This helper checks both places (prefer `context.vars`) to avoid boilerplate in processors.
+ * Read a var from the VU-scoped Artillery context.
  */
 export function getPersistedVar(
   context: ArtilleryContext,
@@ -106,6 +82,5 @@ export function getPersistedVar(
 ): unknown {
   const vars = ensureVars(context);
   if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
-  const svars = ensureScenarioVars(context);
-  return svars[key];
+  return undefined;
 }
