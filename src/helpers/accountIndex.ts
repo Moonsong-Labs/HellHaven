@@ -1,7 +1,7 @@
-export type AccountMode = "byIndex" | "sequential" | "random";
+
+import { requireDict, requireInteger } from "./validation.js";
 
 export type AccountIndexSelection = Readonly<{
-  mode: AccountMode;
   index: number;
   /**
    * Human-readable explanation of how the index was chosen (for logs/debug).
@@ -10,56 +10,29 @@ export type AccountIndexSelection = Readonly<{
   source: string;
 }>;
 
-export type ContextVars = Record<string, unknown> | undefined;
-
 let sequentialCounter = 0;
 
-function asInt(value: unknown): number | undefined {
-  if (typeof value === "number")
-    return Number.isInteger(value) ? value : undefined;
-  if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isInteger(n) ? n : undefined;
-  }
-  return undefined;
-}
+/**
+ * Strict parsing/validation entry point for account-index selection.
+ *
+ * We only support **sequential** account selection:
+ * - Primary path: `scripts/run-scenario.ts` starts a local index allocator and
+ *   `deriveAccount` uses it to guarantee uniqueness across VUs.
+ * - Fallback path: if running Artillery directly (without the wrapper), we use
+ *   local sequential selection based on `ACCOUNT_INDEX_START/COUNT`.
+ */
 
-function readInt(vars: ContextVars, key: string): number | undefined {
-  return asInt(vars?.[key]);
-}
+export function parseAccountIndexConfig(
+  rawVars: unknown
+): Readonly<{ start: number; count: number }> {
+  const vars = requireDict(rawVars, "context.vars");
 
-function readString(vars: ContextVars, key: string): string | undefined {
-  const raw = vars?.[key];
-  if (typeof raw === "string" && raw.trim().length > 0) return raw.trim();
-  return undefined;
-}
-
-function requireInt(vars: ContextVars, key: string): number {
-  const n = readInt(vars, key);
-  if (typeof n !== "number") {
-    throw new Error(`Missing or invalid integer var: ${key}`);
-  }
-  return n;
-}
-
-export function requireAccountIndexRange(vars: ContextVars): Readonly<{
-  start: number;
-  count: number;
-}> {
-  const start = requireInt(vars, "ACCOUNT_INDEX_START");
-  const count = requireInt(vars, "ACCOUNT_INDEX_COUNT");
+  const start = requireInteger(vars.ACCOUNT_INDEX_START, "ACCOUNT_INDEX_START");
+  const count = requireInteger(vars.ACCOUNT_INDEX_COUNT, "ACCOUNT_INDEX_COUNT");
   if (start < 0) throw new Error("ACCOUNT_INDEX_START must be >= 0");
   if (count <= 0) throw new Error("ACCOUNT_INDEX_COUNT must be > 0");
-  return { start, count };
-}
 
-function normalizeMode(raw: unknown): AccountMode {
-  if (raw === "byIndex" || raw === "sequential" || raw === "random") return raw;
-  throw new Error(
-    `Missing or invalid ACCOUNT_MODE: ${String(
-      raw
-    )} (expected 'byIndex', 'sequential', or 'random')`
-  );
+  return { start, count };
 }
 
 function parseWorkerIndex(raw: string | undefined): number {
@@ -70,88 +43,37 @@ function parseWorkerIndex(raw: string | undefined): number {
   return n - 1;
 }
 
-/**
- * Simple seeded PRNG (Linear Congruential Generator).
- *
- * - Deterministic: same seed => same sequence
- * - Not cryptographically secure (fine for load-test user selection)
- * - Returns values in [0, 1)
- */
-function lcg(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    // Numerical Recipes LCG constants
-    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
-    return state / 2 ** 32;
-  };
-}
+export function selectAccountIndex(rawVars: unknown): AccountIndexSelection {
+  // Entry point: `context.vars` must be an object; fail fast on misconfigured scenarios/callers.
+  const vars = requireDict(rawVars, "context.vars");
 
-export function selectAccountIndex(vars: ContextVars): AccountIndexSelection {
   // Cache: keep index stable for the duration of the VU.
-  const cached = readInt(vars, "__accountIndex");
-  if (typeof cached === "number" && cached >= 0) {
-    const cachedModeRaw = readString(vars, "__accountMode") ?? "byIndex";
-    const cachedMode = ((): AccountMode => {
-      try {
-        return normalizeMode(cachedModeRaw);
-      } catch {
-        return "byIndex";
-      }
-    })();
-    const cachedSource = readString(vars, "__accountIndexSource") ?? "cached";
+  if (vars.__accountIndex !== undefined) {
+    const cached = requireInteger(vars.__accountIndex, "__accountIndex");
+    if (cached < 0) throw new Error("__accountIndex must be >= 0");
+
+    const cachedSourceRaw = vars.__accountIndexSource;
+    const cachedSource =
+      typeof cachedSourceRaw === "string" && cachedSourceRaw.trim().length > 0
+        ? cachedSourceRaw.trim()
+        : "cached";
+
     return {
-      mode: cachedMode,
       index: cached,
       source: `cached (${cachedSource})`,
     };
   }
 
-  const mode = normalizeMode(readString(vars, "ACCOUNT_MODE"));
-
-  if (mode === "byIndex") {
-    // Payload override is allowed:
-    const fromPayload = readInt(vars, "accountIndex");
-    if (typeof fromPayload === "number") {
-      if (fromPayload < 0) throw new Error("accountIndex must be >= 0");
-      return { mode, index: fromPayload, source: "payload:accountIndex" };
-    }
-
-    const fromYaml = requireInt(vars, "ACCOUNT_INDEX");
-    if (fromYaml < 0) throw new Error("ACCOUNT_INDEX must be >= 0");
-    return { mode, index: fromYaml, source: "variables:ACCOUNT_INDEX" };
-  }
-
-  const start = requireInt(vars, "ACCOUNT_INDEX_START");
-  const count = requireInt(vars, "ACCOUNT_INDEX_COUNT");
-  if (start < 0) throw new Error("ACCOUNT_INDEX_START must be >= 0");
-  if (count <= 0) throw new Error("ACCOUNT_INDEX_COUNT must be > 0");
-
+  // Strict entry point: validate once, then operate on typed config.
+  const cfg = parseAccountIndexConfig(vars);
   const workerOffset = parseWorkerIndex(process.env.ARTILLERY_WORKER_INDEX);
 
-  if (mode === "sequential") {
-    const local = sequentialCounter++;
-    const idx = start + ((local + workerOffset) % count);
-    if (idx < 0) throw new Error("Derived index must be >= 0");
-    return {
-      mode,
-      index: idx,
-      source: `sequential(local=${local}, workerOffset=${workerOffset})`,
-    };
-  }
-
-  // random
-  const seed = readInt(vars, "ACCOUNT_RANDOM_SEED");
-  const rnd = typeof seed === "number" ? lcg(seed + workerOffset) : Math.random;
-  const pick = Math.floor(rnd() * count);
-  const idx = start + pick;
+  const local = sequentialCounter++;
+  const idx = cfg.start + ((local + workerOffset) % cfg.count);
   if (idx < 0) throw new Error("Derived index must be >= 0");
   return {
-    mode,
     index: idx,
-    source:
-      typeof seed === "number"
-        ? `random(seed=${seed}, workerOffset=${workerOffset})`
-        : `random(unseeded, workerOffset=${workerOffset})`,
+    source: `sequential(local=${local}, workerOffset=${workerOffset})`,
   };
 }
 
@@ -160,6 +82,5 @@ export function cacheAccountIndex(
   selection: AccountIndexSelection
 ): void {
   vars.__accountIndex = selection.index;
-  vars.__accountMode = selection.mode;
   vars.__accountIndexSource = selection.source;
 }

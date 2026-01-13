@@ -2,7 +2,6 @@ config:
   target: "http://localhost"
   processor: "../dist/src/processors/index.js"
   variables:
-    ACCOUNT_MODE: sequential
     ACCOUNT_INDEX_START: 0
     ACCOUNT_INDEX_COUNT: 1000
 

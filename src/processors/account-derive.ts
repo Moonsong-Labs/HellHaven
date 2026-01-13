@@ -1,6 +1,5 @@
 import {
   cacheAccountIndex,
-  requireAccountIndexRange,
   selectAccountIndex,
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
@@ -20,7 +19,7 @@ import { createEmitter } from "../helpers/metrics.js";
 /**
  * Fetch the next unique account index from the local index allocator service.
  *
- * - `scripts/run-with-logs.ts` starts a tiny HTTP server per test run.
+ * - `scripts/run-scenario.ts` starts a tiny HTTP server per test run.
  * - It exposes `GET /next` which returns `{ index: 0 }`, `{ index: 1 }`, ...
  * - This is how we guarantee global uniqueness/sequentiality across Artillery VUs,
  *   even when Artillery runs VUs in multiple isolated JS sandboxes (where in-process
@@ -59,7 +58,9 @@ async function fetchNextIndex(): Promise<number> {
 
 /**
  * Processor step:
- * - pick an index (allocator if enabled, else ACCOUNT_MODE vars)
+ * - choose a derivation index:
+ *   - when run via `pnpm test:run`, use the local index allocator for unique indices across VUs
+ *   - otherwise, fall back to sequential selection via `ACCOUNT_INDEX_START/COUNT`
  * - derive account from TEST_MNEMONIC
  * - store derived privateKey + derivation info into context.vars
  */
@@ -74,31 +75,6 @@ export async function deriveAccount(
     const logger = getLogger();
     const vars = ensureVars(context);
 
-    // Idempotency: keep VU identity stable.
-    //
-    // Even though many scenarios call `deriveAccount` only once per VU, Artillery can execute
-    // the same VU flow multiple times (loops/repeats/long-lived VUs). This guard prevents
-    // accidentally deriving a *new* account for the same VU on subsequent iterations.
-    const existingPk = vars.privateKey;
-    const existingAddr = vars.__accountAddress;
-    const existingIndex = vars.__accountIndex;
-    if (
-      typeof existingPk === "string" &&
-      typeof existingAddr === "string" &&
-      typeof existingIndex === "number" &&
-      Number.isInteger(existingIndex) &&
-      existingIndex >= 0
-    ) {
-      logger.debug(
-        { address: existingAddr, hasIndex: typeof vars.__accountIndex === "number" },
-        "deriveAccount: already derived for this VU (skipping)"
-      );
-      m.counter("init.derive.ok", 1);
-      m.histogram("init.derive.ms", Date.now() - start);
-      done?.();
-      return;
-    }
-
     const mnemonic =
       process.env.TEST_MNEMONIC?.trim() ??
       requireVarString(vars, "TEST_MNEMONIC");
@@ -109,26 +85,13 @@ export async function deriveAccount(
       // When allocator is enabled, override the selection once per VU
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
-        const allocatorIdx = await fetchNextIndex();
-
-        // Apply modulo to respect ACCOUNT_INDEX_COUNT (cycle through account range)
-        const { start, count } = requireAccountIndexRange(vars);
-        const idx = start + (allocatorIdx % count);
-
-        selection = {
-          mode: "byIndex",
-          index: idx,
-          source: `allocator:/next(raw=${allocatorIdx})`,
-        };
-        persistVars(context, { __allocatorRawIndex: allocatorIdx });
+        const idx = await fetchNextIndex();
+        selection = { index: idx, source: "allocator:/next" };
       }
     }
     cacheAccountIndex(vars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
-    if (!derived.privateKey) {
-      throw new Error("Derived account has no privateKey available");
-    }
 
     persistVars(context, {
       privateKey: derived.privateKey,
@@ -136,7 +99,7 @@ export async function deriveAccount(
       __derivationPath: derived.derivation.path,
     });
 
-    logger.info(
+    logger.debug(
       {
         index: selection.index,
         path: derived.derivation.path,

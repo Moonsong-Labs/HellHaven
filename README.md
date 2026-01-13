@@ -45,7 +45,35 @@ Local notes:
 - `pnpm fmt:fix` — apply formatting
 - `pnpm lint` — check lint rules
 - `pnpm lint:fix` — apply safe lint fixes
-- `pnpm test:run scenarios/<file>.yml` — run any scenario (build + logs wrapper)
+- `pnpm typecheck` — TypeScript typecheck (no emit)
+- `pnpm build` — compile to `./dist`
+- `pnpm with-logs -- <command>` — run `<command>` with per-run JSONL logs + a local index allocator
+- `pnpm run:with-logs -- <command>` — build, then run `<command>` with logs + index allocator
+- `pnpm test:run <scenario.yml>` — run any Artillery scenario (via the logs/index wrapper)
+- `pnpm test:unauth` — unauthenticated MSP endpoints scenario
+- `pnpm test:examples.getProfile` — SIWE + `getProfile` scenario
+- `pnpm test:examples.createBucket` — derive account + create a bucket scenario
+- `pnpm test:download` — SIWE + download file scenario
+- `pnpm util:fund-accounts` — fund derived test accounts
+
+## Fund accounts utility
+
+`pnpm util:fund-accounts` is a small helper to print or fund EVM accounts derived from a mnemonic.
+
+Print first 10 derived addresses:
+
+```bash
+TEST_MNEMONIC="..." pnpm util:fund-accounts
+```
+
+Fund first 10 derived addresses (0.01 native token each):
+
+```bash
+NETWORK=local TEST_MNEMONIC="..." pnpm util:fund-accounts -- --privateKey 0x... --amount 0.01 --start 0 --count 10
+```
+
+Notes:
+- `--batchSize` controls parallelism per batch (default: 10). If `batchSize > count`, only `count` transfers are sent.
 
 List available scenarios:
 
@@ -62,7 +90,7 @@ NETWORK=stagenet pnpm test:run scenarios/<file>.yml
 Examples (replace the scenario file with anything from `ls scenarios`):
 
 ```bash
-NETWORK=local pnpm test:run scenarios/artillery.msp-unauth.yml
+NETWORK=local pnpm test:run scenarios/msp.unauth.yml
 ```
 
 ```bash
@@ -93,11 +121,11 @@ Env vars:
 Examples:
 
 ```bash
-LOG_LEVEL=debug NETWORK=testnet pnpm test:run scenarios/artillery.msp-unauth.yml
+LOG_LEVEL=debug NETWORK=testnet pnpm test:run scenarios/msp.unauth.yml
 ```
 
 ```bash
-LOG_LEVEL=info LOG_FILE=./artillery.log NETWORK=testnet pnpm test:run scenarios/artillery.msp-unauth.yml
+LOG_LEVEL=info LOG_FILE=./artillery.log NETWORK=testnet pnpm test:run scenarios/msp.unauth.yml
 ```
 
 ## Standalone MSP unauth load test
@@ -111,7 +139,7 @@ It uses `NETWORK=testnet|stagenet` and the MSP base URL from `src/networks.ts`.
 Run:
 
 ```bash
-NETWORK=stagenet pnpm test:run scenarios/artillery.msp-unauth.yml
+NETWORK=stagenet pnpm test:run scenarios/msp.unauth.yml
 ```
 
 Knobs (optional):
@@ -160,7 +188,7 @@ The muting is controlled by two processor steps:
 This keeps summaries focused on action timings while still surfacing setup/auth failures.
 
 ### What `deriveAccount` does
-- Picks a unique account index (via the local index allocator started by `scripts/run-with-logs.ts`)
+- Picks a unique account index (via the local index allocator started by `scripts/run-scenario.ts`)
 - Derives an account from `TEST_MNEMONIC`
 - Persists `privateKey` (and derivation metadata) into Artillery vars for later steps
 
