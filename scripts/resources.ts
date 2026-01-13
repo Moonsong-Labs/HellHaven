@@ -60,7 +60,8 @@ async function walkFiles(dirAbs: string): Promise<string[]> {
     if (it.name.startsWith(".")) continue;
     const abs = join(dirAbs, it.name);
     if (it.isDirectory()) {
-      out.push(...(await walkFiles(abs)));
+      const child = await walkFiles(abs);
+      for (const p of child) out.push(p);
       continue;
     }
     if (!it.isFile()) continue;
