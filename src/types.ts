@@ -11,6 +11,11 @@ export interface PolkadotApi {
         isSome: boolean;
       }>;
     };
+    fileSystem: {
+      storageRequests: (fileKey: `0x${string}`) => Promise<{
+        isSome: boolean;
+      }>;
+    };
   };
 }
 
@@ -74,4 +79,19 @@ export type WaitForBucketCreationParams = Readonly<{
  */
 export type WaitForBucketCreationResult = Readonly<{
   receipt: unknown;
+}>;
+
+/**
+ * Resource metadata entry for files under `resources/`.
+ *
+ */
+export type ResourceEntry = Readonly<{
+  /** Repo-root relative path to the file (POSIX-style, e.g. `resources/images/adolphus.jpg`) */
+  path: string;
+  /** Basename of the file */
+  fileName: string;
+  /** Size in bytes */
+  sizeBytes: number;
+  /** Merkle fingerprint (root) */
+  fingerprint: `0x${string}`;
 }>;
