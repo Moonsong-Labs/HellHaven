@@ -35,15 +35,6 @@ scenarios:
       # Create bucket (or reuse if exists)
       - function: actionGetOrCreateBucket
       
-      # Issue storage request
-      - function: actionIssueStorageRequest
-
-      # Wait for chain confirmation (receipt + SR exists)
-      - function: actionWaitForStorageRequestOnChain
-      
-      # Upload file
-      - function: actionUploadFile
-
-      # Wait for chain fulfillment + MSP indexing
-      - function: actionWaitForUploadFulfillment
+      # Upload flow (issue SR + upload + waits)
+      - function: uploadFileFlow
 
