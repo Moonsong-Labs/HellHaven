@@ -86,7 +86,9 @@ export async function deriveAccount(
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
         const idx = await fetchNextIndex();
-        selection = { index: idx, source: "allocator:/next" };
+        // Allocator returns a monotonic global index; keep it as `rawIndex`.
+        // (Account wrapping, if desired, should be handled by the selection strategy.)
+        selection = { index: idx, rawIndex: idx, source: "allocator:/next" };
       }
     }
     cacheAccountIndex(vars, selection);
@@ -102,6 +104,7 @@ export async function deriveAccount(
     logger.debug(
       {
         index: selection.index,
+        rawIndex: selection.rawIndex,
         path: derived.derivation.path,
         address: derived.account.address,
         source: selection.source,
