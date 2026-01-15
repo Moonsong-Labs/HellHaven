@@ -1,3 +1,5 @@
+import { ensure0xPrefix } from "./validation.js";
+
 export type Done = (error?: Error) => void;
 
 export type ArtilleryEvents = Readonly<{
@@ -83,4 +85,50 @@ export function getPersistedVar(
   const vars = ensureVars(context);
   if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
   return undefined;
+}
+
+/**
+ * Read a required var from the VU-scoped Artillery context.
+ *
+ * Throws if the key does not exist on `context.vars`.
+ *
+ * Note: this does NOT validate the value type; callers should validate/cast as needed.
+ */
+export function requirePersistedVar(
+  context: ArtilleryContext,
+  key: string
+): unknown {
+  const vars = ensureVars(context);
+  if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
+  throw new Error(`Missing persisted var: ${key}`);
+}
+
+/**
+ * Read a required persisted string var.
+ *
+ * Throws if missing, not a string, or blank.
+ */
+export function requirePersistedVarString(
+  context: ArtilleryContext,
+  key: string
+): `0x${string}` {
+  const vars = ensureVars(context);
+  return ensure0xPrefix(requireVarString(vars, key));
+}
+
+/**
+ * Read a required persisted number var.
+ *
+ * Throws if missing or not a number. (No range checks.)
+ */
+export function requirePersistedVarNumber(
+  context: ArtilleryContext,
+  key: string
+): number {
+  const vars = ensureVars(context);
+  const v = vars[key];
+  if (typeof v !== "number") {
+    throw new Error(`Missing or invalid var: ${key}`);
+  }
+  return v;
 }
