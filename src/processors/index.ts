@@ -16,3 +16,4 @@ export * from "./metrics.js";
 export * from "./msp-unauth.js";
 export * from "./siwe-bootstrap.js";
 export * from "./examples.js";
+export * from "./files.js";

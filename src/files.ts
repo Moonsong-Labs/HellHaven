@@ -1,5 +1,5 @@
 import {
-  type StorageHubClient,
+  StorageHubClient,
   filesystemAbi,
   FileMetadata,
   FileTrie,
@@ -9,23 +9,25 @@ import {
   ReplicationLevel,
   type EvmWriteOptions,
 } from "@storagehub-sdk/core";
-import type {
-  MspClient,
-  StorageFileInfo,
-  UploadReceipt,
-  UploadOptions,
-} from "@storagehub-sdk/msp-client";
+import { MspClient } from "@storagehub-sdk/msp-client";
+import type { StorageFileInfo, UploadReceipt, UploadOptions } from "@storagehub-sdk/msp-client";
 import { randomFillSync } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { parseEventLogs } from "viem";
 import type { Hex, Log, PublicClient, RpcLog } from "viem";
+import type { ApiPromise } from "@polkadot/api";
 import { getLogger } from "./log.js";
 import type { PolkadotApi } from "./types.js";
 import { DEFAULT_BLOCK_TIME_MS } from "./buckets.js";
 import { sleep } from "./helpers/utils.js";
+import { readNumberEnv } from "./helpers/validation.js";
+import {
+  waitForFinalizedAtLeast,
+  waitForStorageRequestExistsOnChain,
+} from "./userApi.js";
 
 // Re-export SDK types for convenience
 export type { FileInfo, UploadReceipt, UploadOptions };
@@ -461,6 +463,67 @@ export async function waitForStorageRequest(
   return { receipt, blockNumber };
 }
 
+export type WaitForStorageRequestReadyForUploadParams = Readonly<{
+  /**
+   * Base SR confirmation (EVM receipt + StorageRequestIssued event).
+   */
+  publicClient: PublicClient;
+  txHash: Hex;
+  fileKey: `0x${string}`;
+  bucketId: `0x${string}`;
+  location: string;
+  filesystemContractAddress: `0x${string}`;
+  expectedWho: `0x${string}`;
+  /**
+   * Follow-up readiness checks.
+   */
+  userApi: ApiPromise;
+  mspClient: MspClient;
+}>;
+
+/**
+ * Wait for SR to be "ready for upload":
+ * - EVM receipt + StorageRequestIssued event
+ * - Substrate storage request exists
+ * - Finalized lag (indexers/backend ingest)
+ * - MSP expects the fileKey (will accept upload)
+ */
+export async function waitForStorageRequestReadyForUpload(
+  params: WaitForStorageRequestReadyForUploadParams
+): Promise<WaitForStorageRequestResult> {
+  const sr = await waitForStorageRequest({
+    publicClient: params.publicClient,
+    txHash: params.txHash,
+    fileKey: params.fileKey,
+    bucketId: params.bucketId,
+    location: params.location,
+    filesystemContractAddress: params.filesystemContractAddress,
+    expectedWho: params.expectedWho,
+  });
+
+  await waitForStorageRequestExistsOnChain(params.userApi, params.fileKey, {
+    timeoutMs: 120_000,
+    intervalMs: 3_000,
+  });
+
+  // Backends often react to finalized state; wait a small finalized lag after SR block.
+  if (typeof sr.blockNumber === "bigint") {
+    const lagBlocks = BigInt(readNumberEnv("SR_FINALIZATION_LAG_BLOCKS", 1));
+    const target = sr.blockNumber + lagBlocks;
+    await waitForFinalizedAtLeast(params.userApi, target, 120_000);
+  }
+
+  await waitForMspToExpectFileKey({
+    mspClient: params.mspClient,
+    bucketId: params.bucketId,
+    fileKey: params.fileKey,
+    timeoutMs: readNumberEnv("MSP_EXPECT_FILEKEY_TIMEOUT_MS", 120_000),
+    intervalMs: readNumberEnv("MSP_EXPECT_FILEKEY_POLL_MS", 3_000),
+  });
+
+  return sr;
+}
+
 /**
  * Issue a storage request for a file.
  * This submits an EVM transaction to request storage from an MSP.
@@ -793,38 +856,3 @@ export async function waitForMspFileStatus(
   );
 }
 
-/**
- * Generate a test file with random content.
- * @param sizeBytes Size of the file in bytes
- * @param prefix Optional prefix for the content
- * @returns Buffer with the file content
- */
-export function generateTestFile(
-  sizeBytes: number,
-  prefix = "test-file"
-): Buffer {
-  const content = Buffer.alloc(sizeBytes);
-  const prefixBytes = Buffer.from(`${prefix}-`);
-
-  // Write prefix at the start
-  prefixBytes.copy(content, 0);
-
-  // Fill the rest with random data or pattern
-  for (let i = prefixBytes.length; i < sizeBytes; i++) {
-    // Use a simple pattern for reproducibility
-    content[i] = i % 256;
-  }
-
-  return content;
-}
-
-/**
- * Generate a unique file path for testing.
- * @param prefix Optional prefix for the file name
- * @returns A unique file path like "test-20260106-143025.bin"
- */
-export function generateTestFilePath(prefix = "test"): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const random = Math.random().toString(36).substring(2, 8);
-  return `${prefix}-${timestamp}-${random}.bin`;
-}
