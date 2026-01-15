@@ -4,6 +4,13 @@ import { requireDict, requireInteger } from "./validation.js";
 export type AccountIndexSelection = Readonly<{
   index: number;
   /**
+   * Monotonic index (no modulo).
+   *
+   * Use this when you want a stable per-VU sequence for things like resource/file selection,
+   * even when the account derivation index is intentionally wrapped by `count`.
+   */
+  rawIndex: number;
+  /**
    * Human-readable explanation of how the index was chosen (for logs/debug).
    * Do not include secrets.
    */
@@ -52,6 +59,12 @@ export function selectAccountIndex(rawVars: unknown): AccountIndexSelection {
     const cached = requireInteger(vars.__accountIndex, "__accountIndex");
     if (cached < 0) throw new Error("__accountIndex must be >= 0");
 
+    const cachedRaw =
+      vars.__accountIndexRaw !== undefined
+        ? requireInteger(vars.__accountIndexRaw, "__accountIndexRaw")
+        : cached;
+    if (cachedRaw < 0) throw new Error("__accountIndexRaw must be >= 0");
+
     const cachedSourceRaw = vars.__accountIndexSource;
     const cachedSource =
       typeof cachedSourceRaw === "string" && cachedSourceRaw.trim().length > 0
@@ -60,6 +73,7 @@ export function selectAccountIndex(rawVars: unknown): AccountIndexSelection {
 
     return {
       index: cached,
+      rawIndex: cachedRaw,
       source: `cached (${cachedSource})`,
     };
   }
@@ -69,10 +83,14 @@ export function selectAccountIndex(rawVars: unknown): AccountIndexSelection {
   const workerOffset = parseWorkerIndex(process.env.ARTILLERY_WORKER_INDEX);
 
   const local = sequentialCounter++;
-  const idx = cfg.start + ((local + workerOffset) % cfg.count);
+  const offset = local + workerOffset;
+  const rawIndex = cfg.start + offset;
+  const idx = cfg.start + (offset % cfg.count);
   if (idx < 0) throw new Error("Derived index must be >= 0");
+  if (rawIndex < 0) throw new Error("Derived rawIndex must be >= 0");
   return {
     index: idx,
+    rawIndex,
     source: `sequential(local=${local}, workerOffset=${workerOffset})`,
   };
 }
@@ -82,5 +100,6 @@ export function cacheAccountIndex(
   selection: AccountIndexSelection
 ): void {
   vars.__accountIndex = selection.index;
+  vars.__accountIndexRaw = selection.rawIndex;
   vars.__accountIndexSource = selection.source;
 }
