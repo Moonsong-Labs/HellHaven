@@ -293,3 +293,94 @@ export async function waitForStorageRequestFulfilledFinalized(
     })().catch(stop);
   });
 }
+
+export type FinalizedEventSelector = Readonly<{
+  section: string;
+  method: string;
+  /**
+   * Optional additional match on event data.
+   * If omitted, the first matching (section, method) event wins.
+   */
+  matchData?: (data: readonly unknown[]) => boolean;
+}>;
+
+export type FinalizedEventHit = Readonly<{
+  blockNumber: bigint;
+  blockHash: string;
+}>;
+
+/**
+ * Wait until a finalized block contains a specific (section, method) event.
+ *
+ * This is useful for chain-level confirmations that are more semantically meaningful
+ * than “receipt success” (e.g. a delete request event emitted by the runtime).
+ */
+export async function waitForFinalizedEvent(
+  api: ApiPromise,
+  selector: FinalizedEventSelector,
+  timeoutMs = 120_000
+): Promise<FinalizedEventHit> {
+  const deadline = Date.now() + timeoutMs;
+  const a = api as unknown as ApiWithFinalizedEvents;
+
+  return await new Promise<FinalizedEventHit>((resolve, reject) => {
+    const t = setTimeout(() => {
+      reject(
+        new Error(
+          `Timed out waiting for finalized ${selector.section}.${selector.method}`
+        )
+      );
+    }, timeoutMs);
+
+    let unsub: (() => void) | undefined;
+
+    const stop = (hit?: FinalizedEventHit, err?: unknown) => {
+      try {
+        clearTimeout(t);
+      } finally {
+        try {
+          unsub?.();
+        } catch {
+          // ignore
+        }
+      }
+      if (err) reject(err);
+      else if (hit) resolve(hit);
+      else reject(new Error("waitForFinalizedEvent stopped without result"));
+    };
+
+    (async () => {
+      unsub = await a.rpc.chain.subscribeFinalizedHeads(
+        async (header: Readonly<{ number: unknown }>) => {
+          try {
+            if (Date.now() > deadline) {
+              stop(
+                undefined,
+                new Error(
+                  `Timed out waiting for finalized ${selector.section}.${selector.method}`
+                )
+              );
+              return;
+            }
+
+            const blockNumber = toBigIntBlockNumber(header.number);
+            const hash = await a.rpc.chain.getBlockHash(header.number);
+            const records = await a.query.system.events.at(hash);
+
+            for (const r of records) {
+              const ev = r.event;
+              if (String(ev.section) !== selector.section) continue;
+              if (String(ev.method) !== selector.method) continue;
+              if (selector.matchData && !selector.matchData(ev.data)) continue;
+
+              stop({ blockNumber, blockHash: String(hash) });
+              return;
+            }
+          } catch (err) {
+            stop(undefined, err);
+          }
+        }
+      );
+    })().catch((err) => stop(undefined, err));
+  });
+}

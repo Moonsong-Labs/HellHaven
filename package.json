@@ -21,6 +21,7 @@
     "test:examples.getProfile": "pnpm test:run scenarios/examples.getProfile.yml",
     "test:examples.createBucket": "pnpm test:run scenarios/examples.createBucket.yml",
     "test:examples.uploadFile": "pnpm test:run scenarios/examples.uploadFile.yml",
+    "test:examples.deleteFile": "pnpm test:run scenarios/examples.deleteFile.yml",
     "test:download": "pnpm test:run scenarios/download.yml",
     "util:fund-accounts": "pnpm exec tsx scripts/fund-accounts.ts",
     "util:resources:manifest": "pnpm exec tsx scripts/resources.ts"

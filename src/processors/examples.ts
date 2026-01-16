@@ -916,3 +916,222 @@ export async function actionWaitForUploadFulfillment(
     done?.(toError(err));
   }
 }
+
+/**
+ * Delete the uploaded file from the MSP.
+ *
+ * Reads from context:
+ * - __uploadBucketId
+ * - __uploadFileKey
+ * - __siweSession
+ *
+ * Stores in context (best-effort, for debugging):
+ * - __deleteRequestedAt: number (ms since epoch)
+ * - __deleteResult: unknown
+ */
+export async function actionDeleteFile(
+  context: ArtilleryContext,
+  events: ArtilleryEvents,
+  done?: Done
+): Promise<void> {
+  const start = Date.now();
+  const logger = getLogger();
+  const m = createEmitter(context, events);
+
+  try {
+    const env = readEnv();
+    const network = NETWORKS[env.network];
+    const vars = ensureVars(context);
+
+    const bucketId = getPersistedVar(context, "__uploadBucketId");
+    const fileKey = getPersistedVar(context, "__uploadFileKey");
+    const location = getPersistedVar(context, "__uploadLocation");
+    const fingerprint = getPersistedVar(context, "__uploadFingerprint");
+    const sizeBytes = getPersistedVar(context, "__uploadFileSizeBytes");
+    const srTxHash = getPersistedVar(context, "__uploadStorageRequestTxHash");
+
+    if (!bucketId || typeof bucketId !== "string") {
+      throw new Error(
+        "No __uploadBucketId in context. Run actionGetOrCreateBucket first."
+      );
+    }
+    if (!fileKey || typeof fileKey !== "string") {
+      throw new Error(
+        "No __uploadFileKey in context. Run actionIssueStorageRequest first."
+      );
+    }
+    if (!location || typeof location !== "string") {
+      throw new Error(
+        "No __uploadLocation in context. Run actionIssueStorageRequest first."
+      );
+    }
+    if (!fingerprint || typeof fingerprint !== "string") {
+      throw new Error(
+        "No __uploadFingerprint in context. Run actionIssueStorageRequest first."
+      );
+    }
+    if (typeof sizeBytes !== "number") {
+      throw new Error(
+        "No __uploadFileSizeBytes in context. Run actionIssueStorageRequest first."
+      );
+    }
+    if (!srTxHash || typeof srTxHash !== "string") {
+      throw new Error(
+        "No __uploadStorageRequestTxHash in context. Run actionIssueStorageRequest first."
+      );
+    }
+
+    // Private key is set by deriveAccount
+    const pkRaw = requireVarString(vars, "privateKey");
+    const pk = ensure0xPrefix(pkRaw, 32).toLowerCase() as `0x${string}`;
+    const account = privateKeyToAccount(pk);
+
+    const walletClient = createViemWallet(network, account);
+    const { chain, transportUrl } = toViemChain(network);
+    const publicClient = createPublicClient({
+      chain,
+      transport: http(transportUrl, { timeout: DEFAULT_EVM_RPC_TIMEOUT_MS }),
+    });
+
+    const storageHubClient = new StorageHubClient({
+      rpcUrl: transportUrl,
+      chain,
+      walletClient,
+      filesystemContractAddress: network.chain.filesystemPrecompileAddress,
+    });
+
+    // Build the FileInfo required by StorageHubClient.requestDeleteFile
+    // It needs the blockHash where the file was created (the SR tx receipt blockHash).
+    const srReceipt = await publicClient.waitForTransactionReceipt({
+      hash: srTxHash as `0x${string}`,
+    });
+
+    const fileInfo = {
+      fileKey: fileKey as `0x${string}`,
+      fingerprint: fingerprint as `0x${string}`,
+      bucketId: bucketId as `0x${string}`,
+      location,
+      size: BigInt(sizeBytes),
+      blockHash: srReceipt.blockHash,
+      txHash: srTxHash as `0x${string}`,
+    };
+
+    const delStart = Date.now();
+    const deleteTxHash = await storageHubClient.requestDeleteFile(fileInfo);
+    m.histogram("action.deleteFile.requestDeleteFile.ms", Date.now() - delStart);
+
+    persistVars(context, {
+      __deleteRequestedAt: Date.now(),
+      __deleteFileTxHash: deleteTxHash,
+    });
+
+    logger.info(
+      { bucketId, fileKey, deleteTxHash },
+      "Delete requested (on-chain)"
+    );
+    m.counter("action.deleteFile.ok", 1);
+    m.histogram("action.deleteFile.ms", Date.now() - start);
+    done?.();
+  } catch (err) {
+    logger.error({ err }, "actionDeleteFile failed");
+    m.counter("action.deleteFile.err", 1);
+    done?.(toError(err));
+  }
+}
+
+/**
+ * Wait until the file is gone from the MSP (eventual consistency after delete).
+ *
+ * Success condition: `mspClient.files.getFileInfo(bucketId, fileKey)` throws.
+ *
+ * Reads from context:
+ * - __uploadBucketId
+ * - __uploadFileKey
+ * - __siweSession
+ */
+export async function actionWaitForFileDeletion(
+  context: ArtilleryContext,
+  events: ArtilleryEvents,
+  done?: Done
+): Promise<void> {
+  const start = Date.now();
+  const logger = getLogger();
+  const m = createEmitter(context, events);
+
+  try {
+    const env = readEnv();
+    const network = NETWORKS[env.network];
+    const vars = ensureVars(context);
+
+    const bucketId = getPersistedVar(context, "__uploadBucketId");
+    const fileKey = getPersistedVar(context, "__uploadFileKey");
+    const deleteTxHash = getPersistedVar(context, "__deleteFileTxHash");
+
+    if (!bucketId || typeof bucketId !== "string") {
+      throw new Error(
+        "No __uploadBucketId in context. Run actionGetOrCreateBucket first."
+      );
+    }
+    if (!fileKey || typeof fileKey !== "string") {
+      throw new Error(
+        "No __uploadFileKey in context. Run actionIssueStorageRequest first."
+      );
+    }
+    if (!deleteTxHash || typeof deleteTxHash !== "string") {
+      throw new Error(
+        "No __deleteFileTxHash in context. Run actionDeleteFile first."
+      );
+    }
+
+    // Private key is set by deriveAccount (not strictly needed for waits, but keeps pattern consistent)
+    const pkRaw = requireVarString(vars, "privateKey");
+    const pk = ensure0xPrefix(pkRaw, 32).toLowerCase() as `0x${string}`;
+    const account = privateKeyToAccount(pk);
+
+    const { chain, transportUrl } = toViemChain(network);
+    const publicClient = createPublicClient({
+      chain,
+      transport: http(transportUrl, { timeout: DEFAULT_EVM_RPC_TIMEOUT_MS }),
+    });
+
+    // 1) EVM receipt success
+    const receiptStart = Date.now();
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: deleteTxHash as `0x${string}`,
+    });
+    m.histogram(
+      "action.waitForFileDeletion.receipt.ms",
+      Date.now() - receiptStart
+    );
+    if (receipt.status !== "success") {
+      throw new Error(
+        `Delete tx failed (hash=${deleteTxHash}, status=${receipt.status})`
+      );
+    }
+
+    // 2) Substrate finalization lag (mirrors SR finalization strategy)
+    if (typeof receipt.blockNumber === "bigint") {
+      const userApi = await getUserApiSingleton(network);
+      const lagBlocks = BigInt(readNumberEnv("DELETE_FINALIZATION_LAG_BLOCKS", 1));
+      const target = receipt.blockNumber + lagBlocks;
+      const finalizeStart = Date.now();
+      await waitForFinalizedAtLeast(userApi, target, 240_000);
+      m.histogram(
+        "action.waitForFileDeletion.finalizedLag.ms",
+        Date.now() - finalizeStart
+      );
+    }
+
+    logger.info(
+      { bucketId, fileKey, deleteTxHash, who: account.address },
+      "Delete finalized"
+    );
+    m.counter("action.waitForFileDeletion.ok", 1);
+    m.histogram("action.waitForFileDeletion.ms", Date.now() - start);
+    done?.();
+  } catch (err) {
+    logger.error({ err }, "actionWaitForFileDeletion failed");
+    m.counter("action.waitForFileDeletion.err", 1);
+    done?.(toError(err));
+  }
+}
