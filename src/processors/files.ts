@@ -113,7 +113,7 @@ export async function uploadFileFlow(
       BigInt(sizeBytes),
       mspId,
       peerIds,
-      ReplicationLevel.Basic,
+      ReplicationLevel.Custom,
       1
     );
     if (!txHash) throw new Error("issueStorageRequest returned undefined txHash");
