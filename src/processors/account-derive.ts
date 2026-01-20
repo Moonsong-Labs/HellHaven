@@ -86,7 +86,7 @@ export async function deriveAccount(
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
         const idx = await fetchNextIndex();
-        selection = { index: idx, source: "allocator:/next" };
+        selection = { index: idx, rawIndex: idx, source: "allocator:/next" };
       }
     }
     cacheAccountIndex(vars, selection);

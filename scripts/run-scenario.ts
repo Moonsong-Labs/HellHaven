@@ -138,7 +138,7 @@ function ensureRunLogEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return {
     ...env,
     RUN_ID: runId,
-    LOG_FILE: join(dir, `run-${runId}.jsonl`),
+    LOG_FILE: join(dir, `${runId}-run.jsonl`),
   };
 }
 
