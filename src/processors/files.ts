@@ -26,13 +26,12 @@ import { createViemWallet, toViemChain } from "../sdk/viemWallet.js";
 import {
   computeFileKeyFromMetadata,
   filePathToWebStream,
-  waitForMspFileStatus,
-  waitForStorageRequestReadyForUpload,
 } from "../files.js";
 import {
   getUserApiSingleton,
-  waitForStorageRequestFulfilledFinalized,
 } from "../userApi.js";
+import { ok } from "node:assert";
+import { waitForMspFileStatus, waitForStorageRequestExistsOnChain } from "../waiting.js";
 
 // Default bucket location used by our tests.
 const REMOTE_LOCATION = "/";
@@ -110,27 +109,33 @@ export async function uploadFileFlow(
       BigInt(sizeBytes),
       mspId,
       peerIds,
-      ReplicationLevel.Basic,
+      ReplicationLevel.Custom,
       1
     );
     if (!txHash) throw new Error("issueStorageRequest returned undefined txHash");
     m.histogram("uploadFlow.issueStorageRequest.ms", Date.now() - srStart);
 
-    // Wait until StorageRequest is processed and the backend is expecting the filekey
+
     const userApi = await getUserApiSingleton(network);
-    const readyStart = Date.now();
-    await waitForStorageRequestReadyForUpload({
-      publicClient,
-      txHash,
-      fileKey,
-      bucketId,
-      location: REMOTE_LOCATION,
-      filesystemContractAddress: network.chain.filesystemPrecompileAddress,
-      expectedWho: account.address,
-      userApi,
-      mspClient,
+
+    // First wait stage: wait for transaction receipt
+    const receiptStart = Date.now();
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
     });
-    m.histogram("uploadFlow.wait.readyForUpload.ms", Date.now() - readyStart);
+    ok(receipt.status === "success", "Storage request transaction failed");
+    m.histogram("uploadFlow.waitForTransactionReceipt.ms", Date.now() - receiptStart);
+
+
+    // Second wait stage: wait until we can see the storage request on chain
+    const onChainStart = Date.now();
+    await waitForStorageRequestExistsOnChain(userApi, fileKey);
+    m.histogram("uploadFlow.existOnChain.ms", Date.now() - onChainStart);
+
+    // Thrid wait stage: wait until the file status is inProgress --> file was indexed and we can proceed with the upload
+    const srAcceptedStart = Date.now();
+    await waitForMspFileStatus(mspClient, bucketId, fileKey, "inProgress");
+    m.histogram("uploadFlow.StorageRequestAccepted.ms", Date.now() - srAcceptedStart);
 
     // Upload file bytes to MSP
     const upStart = Date.now();
@@ -147,20 +152,14 @@ export async function uploadFileFlow(
     );
     m.histogram("uploadFlow.uploadFile.ms", Date.now() - upStart);
 
-    // Wait after upload (chain fulfillment + MSP ready)
-    const fulfillStart = Date.now();
-    await waitForStorageRequestFulfilledFinalized(userApi, fileKey);
-    m.histogram("uploadFlow.wait.fulfilledChain.ms", Date.now() - fulfillStart);
-
+    // File uploaded to backend. Wait until chain fulfill the SR
     const mspReadyStart = Date.now();
-    await waitForMspFileStatus({
+    await waitForMspFileStatus(
       mspClient,
       bucketId,
       fileKey,
-      desiredStatus: "ready",
-      timeoutMs: 660_000,
-      intervalMs: 3_000,
-    });
+      "ready"
+    );
     m.histogram("uploadFlow.wait.mspReady.ms", Date.now() - mspReadyStart);
 
     // Persist for follow-up steps (delete / waits).
@@ -180,4 +179,3 @@ export async function uploadFileFlow(
     done?.(toError(err));
   }
 }
-

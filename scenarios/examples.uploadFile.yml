@@ -17,11 +17,11 @@ config:
     # instead of duration*arrivalRate.
     - name: warm-up
       duration: 100
-      arrivalRate: 2
+      arrivalRate: 5
 
     - name: test
       duration: 500
-      arrivalRate: 2
+      arrivalRate: 5
 
 scenarios:
   - name: upload_single_file
