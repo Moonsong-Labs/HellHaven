@@ -1,5 +1,6 @@
 import {
   cacheAccountIndex,
+  parseAccountIndexConfig,
   selectAccountIndex,
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
@@ -85,8 +86,16 @@ export async function deriveAccount(
       // When allocator is enabled, override the selection once per VU
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
-        const idx = await fetchNextIndex();
-        selection = { index: idx, rawIndex: idx, source: "allocator:/next" };
+        const cfg = parseAccountIndexConfig(vars);
+        const raw = await fetchNextIndex();
+        const wrapped = cfg.start + (raw % cfg.count);
+        // Keep a monotonic rawIndex for logs/analytics even though derivation wraps.
+        const rawIndex = cfg.start + raw;
+        selection = {
+          index: wrapped,
+          rawIndex,
+          source: `allocator:/next (wrapped start=${cfg.start} count=${cfg.count})`,
+        };
       }
     }
     cacheAccountIndex(vars, selection);
