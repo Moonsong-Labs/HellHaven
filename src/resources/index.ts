@@ -21,7 +21,9 @@ export function pickSequentialResource(params: Readonly<{ sequence: number }>) {
       "No resources available. Add files under `resources/` and run `pnpm build` (or `pnpm util:resources:manifest`)."
     );
   }
-  const idx = ((params.sequence % RESOURCES.length) + RESOURCES.length) % RESOURCES.length;
+  const idx =
+    ((params.sequence % RESOURCES.length) + RESOURCES.length) %
+    RESOURCES.length;
   const picked = RESOURCES[idx];
   if (!picked) throw new Error("pickSequentialResource: index out of bounds");
   return picked;

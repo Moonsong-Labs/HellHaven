@@ -44,9 +44,8 @@ async function runWithConcurrency<T, R>(
     }
   };
 
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    () => runWorker()
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
+    runWorker()
   );
   await Promise.all(workers);
   return out;
@@ -132,7 +131,10 @@ function hasFlag(args: string[], key: string): boolean {
   return args.includes(key);
 }
 
-function parseIntStrict(raw: string | undefined, key: string): number | undefined {
+function parseIntStrict(
+  raw: string | undefined,
+  key: string
+): number | undefined {
   if (raw === undefined) return undefined;
   if (raw.trim().length === 0) return undefined;
   const n = Number(raw);
@@ -186,7 +188,10 @@ function pickSizeBytes(minBytes: number, maxBytes: number): number {
   return minBytes + Math.floor(Math.random() * span);
 }
 
-async function writeRandomFile(pathAbs: string, sizeBytes: number): Promise<void> {
+async function writeRandomFile(
+  pathAbs: string,
+  sizeBytes: number
+): Promise<void> {
   // Stream random bytes to disk to avoid large memory usage.
   const ws = createWriteStream(pathAbs, { flags: "w" });
   const CHUNK = 8 * 1024 * 1024; // 8 MiB
@@ -292,7 +297,9 @@ async function main(): Promise<void> {
 
   const files = (await walkFiles(resourcesDir)).sort();
   if (files.length === 0) {
-    console.error("[manifest] No files found under resources/. Add files and retry.");
+    console.error(
+      "[manifest] No files found under resources/. Add files and retry."
+    );
     process.exit(2);
   }
 
@@ -322,4 +329,3 @@ async function main(): Promise<void> {
 }
 
 await main();
-

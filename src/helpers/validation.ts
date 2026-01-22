@@ -21,7 +21,6 @@ export function ensure0xPrefix(raw: string, bytes?: number): `0x${string}` {
   return value;
 }
 
-
 /**
  * Read a numeric value from environment variables.
  *

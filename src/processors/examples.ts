@@ -25,15 +25,10 @@ import { readEnv } from "../config.js";
 import { ensure0xPrefix, readNumberEnv } from "../helpers/validation.js";
 import { privateKeyToAccount } from "viem/accounts";
 import { createPublicClient, http } from "viem";
-import {
-  createViemWallet,
-  toViemChain,
-} from "../sdk/viemWallet.js";
+import { createViemWallet, toViemChain } from "../sdk/viemWallet.js";
 import { DEFAULT_EVM_RPC_TIMEOUT_MS } from "../config/constants.js";
 import { randomInt, randomUUID } from "node:crypto";
-import {
-  getUserApiSingleton,
-} from "../userApi.js";
+import { getUserApiSingleton } from "../userApi.js";
 
 /**
  * Example action step:

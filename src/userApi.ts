@@ -58,9 +58,11 @@ export async function createUserApi(
   // Fail fast if we connect to an endpoint without the expected pallet metadata.
   // (The TS augmentation only affects compile-time types; runtime is metadata-driven.)
   await api.isReady;
-  const q = (api as unknown as {
-    query?: { fileSystem?: { storageRequests?: unknown } };
-  }).query;
+  const q = (
+    api as unknown as {
+      query?: { fileSystem?: { storageRequests?: unknown } };
+    }
+  ).query;
   if (typeof q?.fileSystem?.storageRequests !== "function") {
     throw new Error(
       `Connected node metadata is missing fileSystem.storageRequests (endpoint=${network.chain.substrateWsUrl}). Ensure you're connecting to a StorageHub chain/spec that includes the fileSystem pallet.`

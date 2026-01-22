@@ -23,15 +23,13 @@ import { NETWORKS } from "../networks.js";
 import { pickSequentialResource } from "../resources/index.js";
 import { buildMspHttpClientConfig } from "../sdk/mspHttpConfig.js";
 import { createViemWallet, toViemChain } from "../sdk/viemWallet.js";
-import {
-  computeFileKeyFromMetadata,
-  filePathToWebStream,
-} from "../files.js";
-import {
-  getUserApiSingleton,
-} from "../userApi.js";
+import { computeFileKeyFromMetadata, filePathToWebStream } from "../files.js";
+import { getUserApiSingleton } from "../userApi.js";
 import { ok } from "node:assert";
-import { waitForMspFileStatus, waitForStorageRequestExistsOnChain } from "../waiting.js";
+import {
+  waitForMspFileStatus,
+  waitForStorageRequestExistsOnChain,
+} from "../waiting.js";
 
 // Default bucket location used by our tests.
 const REMOTE_LOCATION = "/";
@@ -112,9 +110,9 @@ export async function uploadFileFlow(
       ReplicationLevel.Custom,
       1
     );
-    if (!txHash) throw new Error("issueStorageRequest returned undefined txHash");
+    if (!txHash)
+      throw new Error("issueStorageRequest returned undefined txHash");
     m.histogram("uploadFlow.issueStorageRequest.ms", Date.now() - srStart);
-
 
     const userApi = await getUserApiSingleton(network);
 
@@ -124,8 +122,10 @@ export async function uploadFileFlow(
       hash: txHash,
     });
     ok(receipt.status === "success", "Storage request transaction failed");
-    m.histogram("uploadFlow.waitForTransactionReceipt.ms", Date.now() - receiptStart);
-
+    m.histogram(
+      "uploadFlow.waitForTransactionReceipt.ms",
+      Date.now() - receiptStart
+    );
 
     // Second wait stage: wait until we can see the storage request on chain
     const onChainStart = Date.now();
@@ -135,7 +135,10 @@ export async function uploadFileFlow(
     // Thrid wait stage: wait until the file status is inProgress --> file was indexed and we can proceed with the upload
     const srAcceptedStart = Date.now();
     await waitForMspFileStatus(mspClient, bucketId, fileKey, "inProgress");
-    m.histogram("uploadFlow.StorageRequestAccepted.ms", Date.now() - srAcceptedStart);
+    m.histogram(
+      "uploadFlow.StorageRequestAccepted.ms",
+      Date.now() - srAcceptedStart
+    );
 
     // Upload file bytes to MSP
     const upStart = Date.now();
@@ -154,12 +157,7 @@ export async function uploadFileFlow(
 
     // File uploaded to backend. Wait until chain fulfill the SR
     const mspReadyStart = Date.now();
-    await waitForMspFileStatus(
-      mspClient,
-      bucketId,
-      fileKey,
-      "ready"
-    );
+    await waitForMspFileStatus(mspClient, bucketId, fileKey, "ready");
     m.histogram("uploadFlow.wait.mspReady.ms", Date.now() - mspReadyStart);
 
     // Persist for follow-up steps (delete / waits).

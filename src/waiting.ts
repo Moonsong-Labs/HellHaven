@@ -4,13 +4,12 @@ import type { ApiPromise } from "@polkadot/api";
 import { getLogger } from "./log.js";
 import { sleep } from "./helpers/utils.js";
 
-
 /**
  * Poll Substrate storage until `fileSystem.storageRequests(fileKey)` is Some.
  */
 export async function waitForStorageRequestExistsOnChain(
   api: ApiPromise,
-  fileKey: `0x${string}`,
+  fileKey: `0x${string}`
 ): Promise<void> {
   const timeoutMs = 180_000;
   const intervalMs = 1_000;
@@ -41,7 +40,7 @@ export async function waitForMspFileStatus(
   mspClient: MspClient,
   bucketId: `0x${string}`,
   fileKey: `0x${string}`,
-  desiredStatus: string,
+  desiredStatus: string
 ): Promise<StorageFileInfo> {
   const logger = getLogger();
   const timeoutMs = 700_000; // At least 11min to wait for expiration
@@ -70,9 +69,7 @@ export async function waitForMspFileStatus(
 
       // File status will turn into Ready when all requested BSPs confirm
       if (info.status === desiredStatus) {
-        logger.info(
-          `File: ${fileKey} reached desired status: ${info.status}`
-        );
+        logger.info(`File: ${fileKey} reached desired status: ${info.status}`);
         return info;
       }
     }
