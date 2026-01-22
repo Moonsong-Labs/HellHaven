@@ -16,7 +16,6 @@
     "with-logs": "pnpm exec tsx scripts/run-scenario.ts --",
     "run:with-logs": "pnpm build && pnpm with-logs",
     "test:run": "pnpm run:with-logs artillery run",
-
     "test:unauth": "pnpm test:run scenarios/msp.unauth.yml",
     "test:examples.getProfile": "pnpm test:run scenarios/examples.getProfile.yml",
     "test:examples.createBucket": "pnpm test:run scenarios/examples.createBucket.yml",
@@ -26,9 +25,11 @@
     "util:resources:manifest": "pnpm exec tsx scripts/resources.ts"
   },
   "dependencies": {
+    "@polkadot/api": "^16.5.4",
     "@storagehub-sdk/core": "0.4.0",
     "@storagehub-sdk/msp-client": "0.4.0",
-    "@polkadot/api": "^16.5.4",
+    "@storagehub/api-augment": "^0.2.14",
+    "@storagehub/types-bundle": "^0.2.9",
     "artillery": "^2.0.0",
     "pino": "^10.1.0",
     "viem": "^2.42.1"
