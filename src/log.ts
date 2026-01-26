@@ -74,7 +74,7 @@ function buildDefaultLogFilePath(): string {
   const stamp = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
   const dir = join(process.cwd(), "logs");
   mkdirSync(dir, { recursive: true });
-  return join(dir, `run-${stamp}-pid${process.pid}.jsonl`);
+  return join(dir, `${stamp}-pid${process.pid}-run.jsonl`);
 }
 
 export function readLogConfig(): LogConfig {

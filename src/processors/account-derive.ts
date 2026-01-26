@@ -1,10 +1,10 @@
 import {
   cacheAccountIndex,
+  parseAccountIndexConfig,
   selectAccountIndex,
 } from "../helpers/accountIndex.js";
 import { deriveAccountFromMnemonic } from "../helpers/accounts.js";
 import {
-  ensureScenarioVars,
   ensureVars,
   requireVarString,
   persistVars,
@@ -13,6 +13,7 @@ import {
   type Done,
 } from "../helpers/artillery.js";
 import { toError } from "../helpers/errors.js";
+import { readNumberEnv } from "../helpers/validation.js";
 import { getLogger } from "../log.js";
 import { createEmitter } from "../helpers/metrics.js";
 
@@ -37,32 +38,23 @@ async function fetchNextIndex(): Promise<number> {
     );
   }
 
-  const timeoutMsRaw = process.env.INDEX_ALLOCATOR_TIMEOUT_MS?.trim();
-  const timeoutMs =
-    timeoutMsRaw && timeoutMsRaw.length > 0
-      ? Number.parseInt(timeoutMsRaw, 10)
-      : 2000;
-  const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 2000;
+  const ms = readNumberEnv("INDEX_ALLOCATOR_TIMEOUT_MS", 2000);
 
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(`${baseUrl}/next`, { signal: ctrl.signal });
-    if (!res.ok) {
-      throw new Error(`allocator /next failed: HTTP ${res.status}`);
-    }
-    const body = (await res.json()) as unknown;
-    if (!body || typeof body !== "object") {
-      throw new Error("allocator response is not an object");
-    }
-    const idx = (body as { index?: unknown }).index;
-    if (!Number.isInteger(idx) || (idx as number) < 0) {
-      throw new Error(`allocator returned invalid index: ${String(idx)}`);
-    }
-    return idx as number;
-  } finally {
-    clearTimeout(t);
+  const res = await fetch(`${baseUrl}/next`, {
+    signal: AbortSignal.timeout(ms),
+  });
+  if (!res.ok) {
+    throw new Error(`allocator /next failed: HTTP ${res.status}`);
   }
+  const body = (await res.json()) as unknown;
+  if (!body || typeof body !== "object") {
+    throw new Error("allocator response is not an object");
+  }
+  const idx = (body as { index?: unknown }).index;
+  if (!Number.isInteger(idx) || (idx as number) < 0) {
+    throw new Error(`allocator returned invalid index: ${String(idx)}`);
+  }
+  return idx as number;
 }
 
 /**
@@ -83,7 +75,6 @@ export async function deriveAccount(
     const m = createEmitter(context, events);
     const logger = getLogger();
     const vars = ensureVars(context);
-    const scenarioVars = ensureScenarioVars(context);
 
     const mnemonic =
       process.env.TEST_MNEMONIC?.trim() ??
@@ -95,12 +86,19 @@ export async function deriveAccount(
       // When allocator is enabled, override the selection once per VU
       // (this avoids duplicates caused by Artillery sandboxing).
       if (!Number.isInteger(vars.__accountIndex)) {
-        const idx = await fetchNextIndex();
-        selection = { index: idx, source: "allocator:/next" };
+        const cfg = parseAccountIndexConfig(vars);
+        const raw = await fetchNextIndex();
+        const wrapped = cfg.start + (raw % cfg.count);
+        // Keep a monotonic rawIndex for logs/analytics even though derivation wraps.
+        const rawIndex = cfg.start + raw;
+        selection = {
+          index: wrapped,
+          rawIndex,
+          source: `allocator:/next (wrapped start=${cfg.start} count=${cfg.count})`,
+        };
       }
     }
     cacheAccountIndex(vars, selection);
-    cacheAccountIndex(scenarioVars, selection);
 
     const derived = deriveAccountFromMnemonic(mnemonic, selection.index);
 

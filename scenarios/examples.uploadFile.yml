@@ -1,0 +1,40 @@
+config:
+  target: "http://localhost"
+  processor: "../dist/src/processors/index.js"
+  variables:
+    ACCOUNT_MODE: sequential
+    ACCOUNT_INDEX_START: 0
+    ACCOUNT_INDEX_COUNT: 1000
+
+  phases:
+    # Note: With `arrivalRate: 1` and `duration: 100`, Artillery will start ~1 new VU per second
+    # for 100 seconds => ~100 VUs in this phase (not "100 VUs instantly").
+    # Same for the `test` phase below (~500 VUs).
+    #
+    # If you ever need exact counts (no timing drift), use:
+    #   - arrivalCount: 100
+    #   - arrivalCount: 500
+    # instead of duration*arrivalRate.
+    - name: warm-up
+      duration: 100
+      arrivalRate: 5
+
+    - name: test
+      duration: 500
+      arrivalRate: 5
+
+scenarios:
+  - name: upload_single_file
+    flow:
+      # Setup phase (not counted in metrics)
+      - function: muteMetrics
+      - function: deriveAccount
+      - function: SIWE
+      - function: unmuteMetrics
+      
+      # Create bucket (or reuse if exists)
+      - function: actionGetOrCreateBucket
+      
+      # Upload flow (issue SR + upload + waits)
+      - function: uploadFileFlow
+

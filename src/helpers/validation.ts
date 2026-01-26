@@ -21,6 +21,21 @@ export function ensure0xPrefix(raw: string, bytes?: number): `0x${string}` {
   return value;
 }
 
+/**
+ * Read a numeric value from environment variables.
+ *
+ * Behavior (kept intentionally strict/simple to avoid drift across call sites):
+ * - if env var is missing/empty => fallback
+ * - if env var parses to a finite number > 0 => that number
+ * - otherwise => fallback
+ */
+export function readNumberEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export type Dict = Readonly<Record<string, unknown>>;
 
 /**

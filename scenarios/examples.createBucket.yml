@@ -2,7 +2,6 @@ config:
   target: "http://localhost"
   processor: "../dist/src/processors/index.js"
   variables:
-    # Account index selection (mnemonic-based):
     ACCOUNT_INDEX_START: 0
     ACCOUNT_INDEX_COUNT: 1000
 

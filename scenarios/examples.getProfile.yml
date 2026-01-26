@@ -10,22 +10,19 @@ config:
   variables:
     # Account index selection (mnemonic-based).
     ACCOUNT_INDEX_START: 0
-    ACCOUNT_INDEX_COUNT: 1000
+    ACCOUNT_INDEX_COUNT: 200
   phases:
     - name: init-and-actions
-      duration: 60
-      arrivalRate: 5
+      duration: 110
+      arrivalRate: 2
 scenarios:
   - name: getProfile
     flow:
       # Init (muted): derive + SIWE without polluting summary metrics
-      - function: muteMetrics
       - function: deriveAccount
       - function: SIWE
-      - function: unmuteMetrics
-      # Actions: focus metrics here
       - loop:
           - function: actionGetProfile
-        count: 100
+        count: 3
 
 

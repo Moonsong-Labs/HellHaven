@@ -1,3 +1,5 @@
+import { ensure0xPrefix } from "./validation.js";
+
 export type Done = (error?: Error) => void;
 
 export type ArtilleryEvents = Readonly<{
@@ -6,17 +8,12 @@ export type ArtilleryEvents = Readonly<{
 
 export type ArtilleryContext = {
   vars?: Record<string, unknown>;
-  scenario?: {
-    vars?: Record<string, unknown>;
-  };
 };
 
 /**
  * Artillery context notes:
  * - `context` is scoped to a single VU (virtual user). `context.vars` is NOT global across VUs.
- * - Artillery may merge `context.scenario.vars` back into `context.vars` across steps/iterations.
- *   We use `persistVars()` for values that must persist reliably for the rest of a scenario/VU
- *   (e.g. derived account info, SIWE session, muting flags).
+ * - This repo intentionally persists per-VU state in `context.vars` only.
  */
 export function ensureVars(context: ArtilleryContext): Record<string, unknown> {
   if (!context.vars) context.vars = {};
@@ -24,32 +21,16 @@ export function ensureVars(context: ArtilleryContext): Record<string, unknown> {
 }
 
 /**
- * Ensure `context.scenario.vars` exists and return it.
- * Use this for values that must persist across scenario iterations/loops.
+ * Persist values for the lifetime of the VU.
  *
- * Side effect: may create `context.scenario` and/or `context.scenario.vars`.
- */
-export function ensureScenarioVars(
-  context: ArtilleryContext
-): Record<string, unknown> {
-  if (!context.scenario) context.scenario = {};
-  if (!context.scenario.vars) context.scenario.vars = {};
-  return context.scenario.vars;
-}
-
-/**
- * Persist values to both:
- * - context.vars (available immediately in the current step/iteration)
- * - context.scenario.vars (persists across iterations; Artillery merges scenario vars back into vars)
+ * NOTE: We intentionally only write to `context.vars` (VU-scoped).
  */
 export function persistVars(
   context: ArtilleryContext,
   patch: Record<string, unknown>
 ): void {
   const vars = ensureVars(context);
-  const svars = ensureScenarioVars(context);
   Object.assign(vars, patch);
-  Object.assign(svars, patch);
 }
 
 /**
@@ -95,10 +76,7 @@ export function readVarBool(
 }
 
 /**
- * Read a "persisted" var from Artillery context.
- *
- * Artillery may merge `context.scenario.vars` back into `context.vars` between steps/iterations.
- * This helper checks both places (prefer `context.vars`) to avoid boilerplate in processors.
+ * Read a var from the VU-scoped Artillery context.
  */
 export function getPersistedVar(
   context: ArtilleryContext,
@@ -106,6 +84,51 @@ export function getPersistedVar(
 ): unknown {
   const vars = ensureVars(context);
   if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
-  const svars = ensureScenarioVars(context);
-  return svars[key];
+  return undefined;
+}
+
+/**
+ * Read a required var from the VU-scoped Artillery context.
+ *
+ * Throws if the key does not exist on `context.vars`.
+ *
+ * Note: this does NOT validate the value type; callers should validate/cast as needed.
+ */
+export function requirePersistedVar(
+  context: ArtilleryContext,
+  key: string
+): unknown {
+  const vars = ensureVars(context);
+  if (Object.prototype.hasOwnProperty.call(vars, key)) return vars[key];
+  throw new Error(`Missing persisted var: ${key}`);
+}
+
+/**
+ * Read a required persisted string var.
+ *
+ * Throws if missing, not a string, or blank.
+ */
+export function requirePersistedVarString(
+  context: ArtilleryContext,
+  key: string
+): `0x${string}` {
+  const vars = ensureVars(context);
+  return ensure0xPrefix(requireVarString(vars, key));
+}
+
+/**
+ * Read a required persisted number var.
+ *
+ * Throws if missing or not a number. (No range checks.)
+ */
+export function requirePersistedVarNumber(
+  context: ArtilleryContext,
+  key: string
+): number {
+  const vars = ensureVars(context);
+  const v = vars[key];
+  if (typeof v !== "number") {
+    throw new Error(`Missing or invalid var: ${key}`);
+  }
+  return v;
 }

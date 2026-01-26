@@ -332,3 +332,28 @@ export async function createBucket(
     valuePropId: params.valuePropId,
   };
 }
+
+/**
+ * Check if a bucket exists on-chain.
+ * @param userApi Polkadot API instance
+ * @param bucketId The bucket ID to check
+ * @returns true if bucket exists, false otherwise
+ */
+export async function checkBucketExists(
+  userApi: PolkadotApi,
+  bucketId: `0x${string}`
+): Promise<boolean> {
+  const logger = getLogger();
+  try {
+    const bucketOpt = await userApi.query.providers.buckets(bucketId);
+    const exists = bucketOpt?.isSome ?? false;
+    logger.debug({ bucketId, exists }, "Checked bucket existence on-chain");
+    return exists;
+  } catch (err) {
+    logger.warn(
+      { bucketId, err },
+      "Failed to check bucket existence, assuming not exists"
+    );
+    return false;
+  }
+}
